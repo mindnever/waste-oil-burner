@@ -10,7 +10,7 @@
 # DEFINES += -DBWCT_COMPAT 
 # DEFINES += -DDEBUG_LEVEL=1
 DEVICE=atmega32u4
-DEFINES += -DF_CPU=8000000
+DEFINES += -DF_CPU=16000000
 COMPILE = avr-gcc -Wall -O2 -I. -mmcu=$(DEVICE) $(DEFINES)
 
 OBJECTS = main.o
@@ -31,12 +31,6 @@ all:	firmware.hex
 
 .c.s:
 	$(COMPILE) -S $< -o $@
-
-flash:	all
-	avrdude -c usbasp -p atmega8 -U lfuse:w:0x9f:m -U hfuse:w:0xc9:m -U flash:w:firmware.hex
-
-flash-nodep:
-	avrdude -c usbasp -p atmega8 -U lfuse:w:0x9f:m -U hfuse:w:0xc9:m -U flash:w:firmware.hex
 
 # Fuse high byte:
 # 0xc9 = 1 1 0 0   1 0 0 1 <-- BOOTRST (boot reset vector at 0x0000)
@@ -81,6 +75,9 @@ avrdude-nodep:
 flash: firmware.hex
 	dfu-programmer $(DEVICE) erase || true
 	dfu-programmer $(DEVICE) flash firmware.hex
+
+launch:
+	dfu-programmer $(DEVICE) launch
 	
 disasm:	firmware.bin
 	avr-objdump -d firmware.bin

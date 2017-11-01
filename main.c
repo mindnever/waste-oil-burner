@@ -19,14 +19,14 @@
 #define LED_B_PORT D
 #define LED_B_PIN 5
 
-#define RELAY_AUX_PORT D
-#define RELAY_AUX_PIN 4
-#define RELAY_FAN_PORT C
-#define RELAY_FAN_PIN  6
-#define RELAY_AIR_PORT D
-#define RELAY_AIR_PIN  7
-#define RELAY_SPARK_PORT E
-#define RELAY_SPARK_PIN 6
+#define RELAY_FAN_PORT D
+#define RELAY_FAN_PIN 4
+#define RELAY_AIR_PORT C
+#define RELAY_AIR_PIN  6
+#define RELAY_SPARK_PORT D
+#define RELAY_SPARK_PIN  7
+#define RELAY_AUX_PORT E
+#define RELAY_AUX_PIN 6
 
 #define TICK_MS 50
 
@@ -164,6 +164,8 @@ int main(void)
   IO_DIR_IN( BUTTON_A );
   IO_DIR_IN( BUTTON_B );
 
+  IO_PIN_HIGH( BUTTON_A ); // pullup
+  IO_PIN_HIGH( BUTTON_B ); // pullup
 
   RELAY_OFF( RELAY_AUX );
   RELAY_OFF( RELAY_FAN );
