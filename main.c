@@ -28,10 +28,14 @@
 #define RELAY_AUX_PORT E
 #define RELAY_AUX_PIN 6
 
-#define TICK_MS 50
+#define TICK_MS 10
 
 #define DELAY_AIR     (3000 / TICK_MS)
 #define TIMEOUT_SPARK (4000 / TICK_MS)
+#define TICK_FAST (50/TICK_MS)
+#define TICK_SLOW (500/TICK_MS)
+
+#define BUTTON_DEBOUNCE (100/TICK_MS)
 
 #define _CONCAT(a,b) a ## b
 #define _CONCAT3(a,b,c) a ## b ## c
@@ -96,16 +100,18 @@ void handle_led()
 {
   static uint8_t fast = 0;
   static uint8_t slow = 0;
-  static uint8_t tick = 0;
+  static uint16_t tick_f = 0, tick_s = 0;
 
-  fast = !fast;
-  
-  if(++tick >= 10)
-  {
-    slow = !slow;
-    tick = 0;
+  if(++tick_f > TICK_FAST) {
+    fast = !fast;
+    tick_f = 0;
   }
   
+  if(++tick_s > TICK_SLOW) {
+    slow = !slow;
+    tick_s = 0;
+  }
+
   if(led_state( led_a, slow, fast)) {
     LED_ON( LED_A );
   } else {
@@ -121,10 +127,9 @@ void handle_led()
 
 uint8_t is_burning()
 {
-#if 0
   static uint8_t value = 0;
 
-  if( PINC & _BV(SENSOR_A) )
+  if( IO_PIN_READ( SENSOR_A ) )
   {
     // high level, not burning
     if(value > 0)
@@ -142,8 +147,6 @@ uint8_t is_burning()
   }
   
   return value > 5;
-#endif
-  return 0;
 }
 
 int main(void)
@@ -164,6 +167,9 @@ int main(void)
   IO_DIR_IN( BUTTON_A );
   IO_DIR_IN( BUTTON_B );
 
+  IO_PIN_HIGH( SENSOR_A ); // pullup
+  IO_PIN_HIGH( SENSOR_B ); // pullup
+
   IO_PIN_HIGH( BUTTON_A ); // pullup
   IO_PIN_HIGH( BUTTON_B ); // pullup
 
@@ -181,6 +187,9 @@ int main(void)
 
   // state = state_sensor_a_test;
 
+  int button_a = 0;
+  int button_b = 0;
+
   for(;;)
   {
     wdt_reset();
@@ -188,6 +197,26 @@ int main(void)
     handle_led();
     
     _delay_ms(TICK_MS);
+    
+    if( !IO_PIN_READ( BUTTON_A ) ) {
+      if(button_a < BUTTON_DEBOUNCE) {
+        ++button_a;
+      }
+    } else {
+      button_a = 0;
+    }
+    
+    if( !IO_PIN_READ( BUTTON_B ) ) {
+      if(button_b < BUTTON_DEBOUNCE) {
+        ++button_b;
+      }
+    } else {
+      button_b = 0;
+    }
+    
+    if(button_a == BUTTON_DEBOUNCE) {
+      state = state_init;
+    }
     
     switch(state)
     {
