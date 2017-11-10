@@ -2,11 +2,23 @@
 #include <util/delay.h>
 #include <avr/wdt.h>
 
+#include "usb_descriptors.h"
+#include "vcp.h"
+
+#include <LUFA/Drivers/Board/LEDs.h>
+#include <LUFA/Drivers/USB/USB.h>
+#include <LUFA/Platform/Platform.h>
+
+
 #define SENSOR_A_PORT F
 #define SENSOR_A_PIN 4
+#define SENSOR_A_ADCMUX 4
+#define SENSOR_A_DIDR0 4
 
 #define SENSOR_B_PORT F
 #define SENSOR_B_PIN 5
+#define SENSOR_B_ADCMUX 5
+#define SENSOR_B_DIDR0 5
 
 #define BUTTON_A_PORT F
 #define BUTTON_A_PIN 6
@@ -28,10 +40,18 @@
 #define RELAY_AUX_PORT E
 #define RELAY_AUX_PIN 6
 
+
+// Arduino A3
+#define IS_BURNING() (sensor_a < 50000)
+
+// Arduino A2
+#define TEMP_SENSOR SENSOR_B
+
 #define TICK_MS 10
 
 #define DELAY_AIR     (3000 / TICK_MS)
 #define TIMEOUT_SPARK (4000 / TICK_MS)
+#define DELAY_STATUS (500/TICK_MS)
 #define TICK_FAST (50/TICK_MS)
 #define TICK_SLOW (500/TICK_MS)
 
@@ -45,6 +65,8 @@
 
 #define IO_PIN(n) _CONCAT(n, _PIN)
 #define IO_PORTNAME(n) _CONCAT(n, _PORT)
+#define IO_ADCMUX(n) _CONCAT(n, _ADCMUX)
+#define IO_DIDR0(n) _CONCAT(n, _DIDR0)
 
 #define IO_PORT_OUT(p) _CONCAT(PORT, p)
 #define IO_PORT_IN(p) _CONCAT(PIN, p)
@@ -125,33 +147,27 @@ void handle_led()
   }
 }
 
-uint8_t is_burning()
+static void adc_mux(uint8_t mux)
 {
-  static uint8_t value = 0;
+  ADMUX = _BV( REFS0 ) | _BV( ADLAR ) | mux;
+}
 
-  if( IO_PIN_READ( SENSOR_A ) )
-  {
-    // high level, not burning
-    if(value > 0)
-    {
-      --value;
-    }
-  }
-  else
-  {
-    // seems to be burning
-    if(value < 10)
-    {
-      ++value;
-    }
-  }
+static void init_sensors()
+{
+// setup ADC, ADMUX input to ADC6, Vref = AVcc, start , 125khz clock
+// free running mode
+  adc_mux( IO_ADCMUX( SENSOR_A ) );
   
-  return value > 5;
+  ADCSRA = _BV( ADEN ) | _BV( ADSC ) | _BV( ADPS0 ) | _BV( ADPS1 ) | _BV( ADPS2 ) | _BV( ADATE );
+
+  DIDR0 = IO_DIDR0( SENSOR_A ) | IO_DIDR0( SENSOR_B ); // disable digital input
 }
 
 int main(void)
 {
   wdt_enable(WDTO_1S);
+  
+  USB_Init();
   
   IO_DIR_OUT( LED_A );
   IO_DIR_OUT( LED_B );
@@ -180,8 +196,11 @@ int main(void)
   
   LED_ON( LED_A );
   LED_ON( LED_B );
+
+  init_sensors();
   
   unsigned int timer = 0;
+  unsigned int status = 0;
 
   state_t state = state_init;
 
@@ -189,14 +208,56 @@ int main(void)
 
   int button_a = 0;
   int button_b = 0;
+  
+  uint16_t sensor_a = 0;
+  uint16_t sensor_b = 0;
+  
+  int sensor = 0;
+    
+  GlobalInterruptEnable();
+
+  VCP_Printf("Booting\r\n");
 
   for(;;)
   {
     wdt_reset();
     
+    USB_USBTask();
+    VCP_Task();
+    
     handle_led();
     
+    switch(sensor) {
+      default:
+        sensor = 0;
+      case 0:
+        adc_mux( IO_ADCMUX( SENSOR_A ) );
+        break;
+      case 1:
+        adc_mux( IO_ADCMUX( SENSOR_B ) );
+        break;
+    }
+    
     _delay_ms(TICK_MS);
+    
+    switch(sensor) {
+      case 0:
+        sensor_a = ADC;
+        break;
+      case 1:
+        sensor_b = ADC;
+        break;
+    }
+    
+    ++sensor;
+    
+    ++status;
+    if(status > DELAY_STATUS) {
+      VCP_Printf("State:%d, Sen_A:%u, Sen_B:%u\r\n", state, sensor_a, sensor_b);
+      status = 0;
+    }
+    
+
     
     if( !IO_PIN_READ( BUTTON_A ) ) {
       if(button_a < BUTTON_DEBOUNCE) {
@@ -262,7 +323,7 @@ int main(void)
         {
           state = state_fault;
         }
-        else if( is_burning() )
+        else if( IS_BURNING() )
         {
           RELAY_OFF( RELAY_SPARK );
           
@@ -273,7 +334,7 @@ int main(void)
         }
         break;
       case state_burn:
-        if( !is_burning() )
+        if( !IS_BURNING() )
         {
           state = state_init;
         }

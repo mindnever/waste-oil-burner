@@ -10,11 +10,23 @@
 # DEFINES += -DBWCT_COMPAT 
 # DEFINES += -DDEBUG_LEVEL=1
 DEVICE=atmega32u4
-DEFINES += -DF_CPU=16000000
-COMPILE = avr-gcc -Wall -O2 -I. -mmcu=$(DEVICE) $(DEFINES)
+F_CPU = 16000000
 
-OBJECTS = main.o
+DEFINES += -DF_CPU=$(F_CPU)
 
+BOARD = PROMICRO
+
+OBJECTS = main.o usb_descriptors.o vcp.o
+
+LUFA_PATH = /Users/mr_w/Workspace/avr/lufa-build
+
+LUFA_CFLAGS = -I$(LUFA_PATH) -DARCH=ARCH_AVR8 -DBOARD=BOARD_$(BOARD) -DF_USB=$(F_CPU)UL -DUSE_LUFA_CONFIG_HEADER -I$(LUFA_PATH)/Config/
+#LUFA_LIBS = -L$(LUFA_PATH) -llufa-$(BOARD)-$(DEVICE)
+LUFA_LIBS = $(LUFA_PATH)/obj/*.o
+
+
+COMPILE = avr-gcc -Wall -O2 -std=gnu99 -I. -mmcu=$(DEVICE) $(DEFINES) $(LUFA_CFLAGS) -ffunction-sections -fdata-sections -funsigned-char -funsigned-bitfields -fpack-struct -fshort-enums -ffreestanding
+LINK = avr-gcc $(LUFA_LIBS)  -Wl,--gc-sections -Wl,--relax -mmcu=$(DEVICE)
 
 # symbolic targets:
 all:	firmware.hex
@@ -57,7 +69,7 @@ clean:
 
 # file targets:
 firmware.bin:	$(OBJECTS)
-	$(COMPILE) -o firmware.bin $(OBJECTS)
+	$(LINK) -o firmware.bin $(OBJECTS)
 
 firmware.hex:	firmware.bin
 	rm -f firmware.hex firmware.eep.hex
