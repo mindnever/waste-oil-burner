@@ -45,7 +45,7 @@
 #define IS_BURNING() (sensor_a < 50000)
 
 // Arduino A2
-#define TEMP_SENSOR SENSOR_B
+#define TEMP_SENSOR() (-0.001958311*(float)sensor_b + 129.5639)
 
 #define TICK_MS 10
 
@@ -253,7 +253,8 @@ int main(void)
     
     ++status;
     if(status > DELAY_STATUS) {
-      VCP_Printf("State:%d, Sen_A:%u, Sen_B:%u\r\n", state, sensor_a, sensor_b);
+      float temperature = TEMP_SENSOR();
+      VCP_Printf("State:%d, Sen_A:%u, Sen_B:%u, Temp:%d\r\n", state, sensor_a, sensor_b, (int)temperature);
       status = 0;
     }
     
