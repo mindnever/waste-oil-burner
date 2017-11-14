@@ -135,9 +135,18 @@ typedef enum
   state_detect_flame,
   state_burn,
   state_fault,
-  state_sensor_a_test,
 } state_t;
 
+static const char *state_name[] = {
+  "Init",
+  "Wait",
+  "Fan",
+  "Air",
+  "Spark",
+  "Flame?",
+  "Burn",
+  "Fault"
+};
 
 typedef enum
 {
@@ -280,8 +289,6 @@ int main(void)
 
   state_t state = state_init;
 
-  // state = state_sensor_a_test;
-
 #ifdef BUTTON_A_PORT
   int button_a = 0;
 #endif
@@ -347,7 +354,7 @@ int main(void)
       VCP_Printf("S:%d, A:%u, B:%u, C:%u, tO:%d, tW: %d, F:%d I:%d  longer and long and even longer text, than usb buffer.. whtf\r\n", state, sensor_a, sensor_b, sensor_c, (int)oil_temperature, (int)water_temperature, (int)burning, (int)ignition_count);
       status = 0;
       lcd_move(0, 0);
-      lcd_printf("F:% 5u", sensor_a);
+      lcd_printf("F:% 5u %-6s", sensor_a, state_name[state]);
       lcd_move(0, 1);
       lcd_printf("tO:%3d" SYM_DEG "C tW:%3d" SYM_DEG "C", (int)oil_temperature, (int)water_temperature);
     }
@@ -476,19 +483,6 @@ int main(void)
 
         break;
 
-      case state_sensor_a_test:
-        {
-          if(IO_PIN_READ( SENSOR_A ))
-          {
-            led_a = blink_fast;
-          }
-          else
-          {
-            led_a = blink_off;
-          }
-          
-        }
-        break;
     }
     
     // heater state machine
@@ -523,5 +517,3 @@ int main(void)
 
 
 }
-
-
