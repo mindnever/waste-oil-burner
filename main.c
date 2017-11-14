@@ -355,7 +355,7 @@ int main(void)
         lcd_init();
       }
       
-      VCP_Printf("S:%d, A:%u, B:%u, C:%u, tO:%d, tW: %d, F:%d I:%d  longer and long and even longer text, than usb buffer.. whtf\r\n", state, sensor_a, sensor_b, sensor_c, (int)oil_temperature, (int)water_temperature, (int)burning, (int)ignition_count);
+      VCP_Printf("State:%d [%s], s_A:%u, s_B:%u, s_C:%u, t_Oil:%d, t_Water:%d, Flame:%d IgnCount:%d\r\n", state, state_name[state], sensor_a, sensor_b, sensor_c, (int)oil_temperature, (int)water_temperature, (int)burning, (int)ignition_count);
       status = 0;
       lcd_move(0, 0);
       lcd_printf("F:% 5u %-6s", sensor_a, state_name[state]);
