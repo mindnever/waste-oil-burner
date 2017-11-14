@@ -99,11 +99,13 @@ void VCP_Task(void)
             if(vcp_tx_out > vcp_tx_in) {
               // write everything until end
               to_write = sizeof(vcp_tx_buffer) - vcp_tx_out;
-              bytes_processed = 0;
-              Endpoint_Write_Stream_LE(&vcp_tx_buffer[vcp_tx_out], to_write, &bytes_processed);
               
-//              vcp_tx_out += bytes_processed;
-      vcp_tx_out += to_write;
+              bytes_processed = 0;
+              if(Endpoint_Write_Stream_LE(&vcp_tx_buffer[vcp_tx_out], to_write, &bytes_processed) == ENDPOINT_RWSTREAM_IncompleteTransfer) {
+                vcp_tx_out += bytes_processed;
+              } else {
+                vcp_tx_out += to_write;
+              }
 
               if(vcp_tx_out >= sizeof(vcp_tx_buffer)) {
                 vcp_tx_out = 0;
@@ -114,10 +116,11 @@ void VCP_Task(void)
               to_write = vcp_tx_in - vcp_tx_out;
               bytes_processed = 0;
 
-              Endpoint_Write_Stream_LE(&vcp_tx_buffer[vcp_tx_out], to_write, &bytes_processed);
-              
-//              vcp_tx_out += bytes_processed;
-      vcp_tx_out += to_write;
+              if(Endpoint_Write_Stream_LE(&vcp_tx_buffer[vcp_tx_out], to_write, &bytes_processed) == ENDPOINT_RWSTREAM_IncompleteTransfer) {
+                vcp_tx_out += bytes_processed;
+              } else {
+                vcp_tx_out += to_write;
+              }
               
               if(vcp_tx_out >= sizeof(vcp_tx_buffer)) {
                 vcp_tx_out = 0;
