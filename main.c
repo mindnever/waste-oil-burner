@@ -351,6 +351,10 @@ int main(void)
       oil_temperature = TEMP_SENSOR(sensor_b);
       water_temperature = TEMP_SENSOR(sensor_c);
       
+      if(lcd_bus_error) {
+        lcd_init();
+      }
+      
       VCP_Printf("S:%d, A:%u, B:%u, C:%u, tO:%d, tW: %d, F:%d I:%d  longer and long and even longer text, than usb buffer.. whtf\r\n", state, sensor_a, sensor_b, sensor_c, (int)oil_temperature, (int)water_temperature, (int)burning, (int)ignition_count);
       status = 0;
       lcd_move(0, 0);

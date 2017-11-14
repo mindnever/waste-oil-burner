@@ -77,6 +77,8 @@
 
 static bool backlight;
 
+bool lcd_bus_error;
+
 static void lcd_write(uint8_t value, bool is_data)
 {
   value <<= 4;
@@ -88,9 +90,15 @@ static void lcd_write(uint8_t value, bool is_data)
     value |= LCD_BT;
   }
   
-  twi_write_bytes(LCD_I2C_ADDR, value, 0, 0);
-  twi_write_bytes(LCD_I2C_ADDR, value | LCD_EN, 0, 0);
-  twi_write_bytes(LCD_I2C_ADDR, value, 0, 0);
+  if(twi_write_bytes(LCD_I2C_ADDR, value, 0, 0) < 0) {
+    lcd_bus_error = true;
+  }
+  if(twi_write_bytes(LCD_I2C_ADDR, value | LCD_EN, 0, 0) < 0) {
+    lcd_bus_error = true;
+  }
+  if(twi_write_bytes(LCD_I2C_ADDR, value, 0, 0) < 0) {
+    lcd_bus_error = true;
+  }
 }
 
 static void lcd_command(uint8_t cmd)
@@ -151,6 +159,8 @@ void lcd_move(uint8_t x, uint8_t y)
 
 void lcd_init()
 {
+  lcd_bus_error = false;
+  
   // set 4 bit mode
   lcd_write( 0x03, false );
   _delay_ms( 5 );
