@@ -31,29 +31,54 @@
 #define LED_B_PORT D
 #define LED_B_PIN 5
 
-#define RELAY_FAN_PORT D
-#define RELAY_FAN_PIN 4
-#define RELAY_AIR_PORT C
-#define RELAY_AIR_PIN  6
-#define RELAY_SPARK_PORT D
-#define RELAY_SPARK_PIN  7
-#define RELAY_AUX_PORT E
-#define RELAY_AUX_PIN 6
+// Arduino 4, 5, 6, 7
+// PROMICRO:
+// PD4, PC6, PD7, PE6
+
+// K1 - aux - PD4
+// K2 - fan - PC6
+// K3 - air - PD7
+// K4 - spark - PE6
+
+
+#define RELAY_FAN_PORT C
+#define RELAY_FAN_PIN 6
+#define RELAY_AIR_PORT D
+#define RELAY_AIR_PIN  7
+#define RELAY_SPARK_PORT E
+#define RELAY_SPARK_PIN  6
+#define RELAY_AUX_PORT D
+#define RELAY_AUX_PIN 4
 
 
 // Arduino A3
-#define IS_BURNING() (sensor_a < 50000)
+#define IS_BURNING() (sensor_a < 61000)
 
 // Arduino A2
 #define TEMP_SENSOR() (-0.001958311*(float)sensor_b + 129.5639)
 
+#define HOT_TEMP 90.0
+#define TEMP_HYST 2
+
+#define IS_HOT(t) (t > HOT_TEMP)
+#define IS_COLD(t) (t < (HOT_TEMP - TEMP_HYST)) 
+
+#define IS_PRESSED(b) ((b) == BUTTON_DEBOUNCE)
+
 #define TICK_MS 10
 
-#define DELAY_AIR     (3000 / TICK_MS)
+#define TIMEOUT_FAN   (10000L / TICK_MS)
+#define TIMEOUT_AIR   (1000L / TICK_MS)
 #define TIMEOUT_SPARK (4000 / TICK_MS)
+#define TIMEOUT_FLAME (4000 / TICK_MS)
 #define DELAY_STATUS (500/TICK_MS)
+
+#define IGNITION_RETRY 3
+
 #define TICK_FAST (50/TICK_MS)
 #define TICK_SLOW (500/TICK_MS)
+
+#define FLAME_SENSOR_DELAY (3000/TICK_MS)
 
 #define BUTTON_DEBOUNCE (100/TICK_MS)
 
@@ -93,6 +118,7 @@ typedef enum
   state_fan,
   state_air,
   state_spark,
+  state_detect_flame,
   state_burn,
   state_fault,
   state_sensor_a_test,
@@ -199,8 +225,10 @@ int main(void)
 
   init_sensors();
   
-  unsigned int timer = 0;
-  unsigned int status = 0;
+  uint32_t timer = 0;
+  uint32_t burning = 0;
+  uint32_t status = 0;
+  uint8_t ignition_count = 0;
 
   state_t state = state_init;
 
@@ -213,6 +241,7 @@ int main(void)
   uint16_t sensor_b = 0;
   
   int sensor = 0;
+  float oil_temperature = 0;
     
   GlobalInterruptEnable();
 
@@ -253,8 +282,8 @@ int main(void)
     
     ++status;
     if(status > DELAY_STATUS) {
-      float temperature = TEMP_SENSOR();
-      VCP_Printf("State:%d, Sen_A:%u, Sen_B:%u, Temp:%d\r\n", state, sensor_a, sensor_b, (int)temperature);
+      oil_temperature = TEMP_SENSOR();
+      VCP_Printf("S:%d, A:%u, B:%u, T:%d, F:%d I:%d  \r\n", state, sensor_a, sensor_b, (int)oil_temperature, (int)burning, (int)ignition_count);
       status = 0;
     }
     
@@ -276,9 +305,6 @@ int main(void)
       button_b = 0;
     }
     
-    if(button_a == BUTTON_DEBOUNCE) {
-      state = state_init;
-    }
     
     switch(state)
     {
@@ -286,6 +312,7 @@ int main(void)
         led_a = blink_off;
         led_b = blink_slow;
         state = state_wait;
+        timer = 0;
         
         // turn off relays
         RELAY_OFF( RELAY_AUX );
@@ -296,49 +323,77 @@ int main(void)
       break;
     
       case state_wait:
-        {
-           // assert oil temperature
+        if(IS_HOT(oil_temperature)) {
            RELAY_ON( RELAY_FAN );
            state = state_fan;
            timer = 0;
+           ++ignition_count;
         }
       break;
 
       case state_fan:
-        if( ++timer  > DELAY_AIR )
+        if( ++timer  > TIMEOUT_FAN )
         {
           RELAY_ON( RELAY_AIR );
           state = state_air;
+          timer = 0;
         }
         break;
 
       case state_air:
-        state = state_spark;
-        RELAY_ON( RELAY_SPARK );
-        led_a = blink_fast;
-        timer = 0;
+        if( ++timer > TIMEOUT_AIR ) {
+            state = state_spark;
+            RELAY_ON( RELAY_SPARK );
+            led_a = blink_fast;
+            timer = 0;
+        }
         break;
 
       case state_spark:
         if( ++timer > TIMEOUT_SPARK )
         {
-          state = state_fault;
+          RELAY_OFF( RELAY_SPARK );
+          state = state_detect_flame;
+          led_a = blink_off;
+          led_b = blink_fast;
+          timer = 0;
+        }
+        break;
+      case state_detect_flame:
+        if( ++timer > TIMEOUT_FLAME )
+        {
+          if(ignition_count > IGNITION_RETRY) {
+            state = state_fault;
+          } else {
+            state = state_init;
+          }
+          timer = 0;
         }
         else if( IS_BURNING() )
         {
-          RELAY_OFF( RELAY_SPARK );
-          
           led_a = blink_off;
-          led_b = blink_on;
+          led_b = blink_slow;
           
           state = state_burn;
+          timer = 0;
+          ignition_count = 0;
         }
         break;
       case state_burn:
-        if( !IS_BURNING() )
-        {
+        if( IS_BURNING() ) {
+          burning = FLAME_SENSOR_DELAY;
+        } else if(burning) {
+          --burning;
+        }
+        
+        if(burning == 0) {
           state = state_init;
         }
+
+//        if( IS_COLD(oil_temperature) ) {
+//          state = state_init;
+//        }
+
         break;
       case state_fault:
         RELAY_OFF( RELAY_AUX );
@@ -365,6 +420,11 @@ int main(void)
         }
         break;
     }
+
+    if(IS_PRESSED(button_a)) {
+      state = state_init;
+    }
+
     
   }
 

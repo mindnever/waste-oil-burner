@@ -153,7 +153,7 @@ void VCP_Task(void)
 void VCP_Printf(const char *fmt, ...)
 {
   va_list ap;
-  char tmp[128];
+  char tmp[256];
   
   va_start(ap, fmt);
   
@@ -162,7 +162,7 @@ void VCP_Printf(const char *fmt, ...)
   tmp[sizeof(tmp) - 1] = 0;
   
   uint8_t l = strlen(tmp);
-  
+
   for(uint8_t i = 0; i < l; ++i) {
     vcp_tx_buffer[vcp_tx_in++] = tmp[i];
     if(vcp_tx_in == sizeof(vcp_tx_buffer)) {
