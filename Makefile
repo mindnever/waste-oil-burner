@@ -16,7 +16,7 @@ DEFINES += -DF_CPU=$(F_CPU)
 
 BOARD = PROMICRO
 
-OBJECTS = main.o usb_descriptors.o vcp.o
+OBJECTS = main.o usb_descriptors.o vcp.o twi.o lcd.o
 
 LUFA_PATH = /Users/mr_w/Workspace/avr/lufa-build
 
