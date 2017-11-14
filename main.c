@@ -360,7 +360,7 @@ int main(void)
       lcd_move(0, 0);
       lcd_printf("F:% 5u %-6s", sensor_a, state_name[state]);
       lcd_move(0, 1);
-      lcd_printf("tO:%3d" SYM_DEG "C tW:%3d" SYM_DEG "C", (int)oil_temperature, (int)water_temperature);
+      lcd_printf("O:%3d" SYM_DEG "C W:%3d" SYM_DEG "C", (int)oil_temperature, (int)water_temperature);
     }
     
 
