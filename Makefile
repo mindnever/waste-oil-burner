@@ -74,7 +74,7 @@ firmware.bin:	$(OBJECTS)
 firmware.hex:	firmware.bin
 	rm -f firmware.hex firmware.eep.hex
 	avr-objcopy -j .text -j .data -O ihex firmware.bin firmware.hex
-	./checksize firmware.bin 8192 960
+	./checksize firmware.bin 20000 2500
 # do the checksize script as our last action to allow successful compilation
 # on Windows with WinAVR where the Unix commands will fail.
 
