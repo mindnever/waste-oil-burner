@@ -71,7 +71,7 @@
 #define TARGET_OIL_TEMPERATURE 90.0
 #define TARGET_WATER_TEMPERATURE 60.0
 
-#define OIL_TEMP_HYST 2
+#define OIL_TEMP_HYST 1
 #define WATER_TEMP_HYST 15
 
 #define IS_OIL_HOT() (oil_temperature > target_oil_temperature)
@@ -85,8 +85,8 @@
 #define TICK_MS 10
 
 #define TIMEOUT_FAN   (10000L / TICK_MS)
-#define TIMEOUT_AIR   (1000L / TICK_MS)
-#define TIMEOUT_SPARK (4000 / TICK_MS)
+#define TIMEOUT_AIR   (150L / TICK_MS)
+#define TIMEOUT_SPARK (6000 / TICK_MS)
 #define TIMEOUT_FLAME (4000 / TICK_MS)
 #define DELAY_STATUS (500/TICK_MS)
 
@@ -372,8 +372,23 @@ int main(void)
             
             VCP_Printf("State:%d [%s], s_A:%u, s_B:%u, s_C:%u, t_Oil:%d, t_Water:%d, Flame:%d IgnCount:%d\r\n", state, state_name[state], sensor_a, sensor_b, sensor_c, (int)oil_temperature, (int)water_temperature, (int)burning, (int)ignition_count);
             status = 0;
+
+            char ab[3] = {
+#ifdef BUTTON_A_PORT
+                IS_PRESSED(button_a) ? 'A' : ' ',
+#else
+                ' ',
+#endif
+#ifdef BUTTON_B_PORT
+                IS_PRESSED(button_b) ? 'B' : ' ',
+#else
+                ' ',
+#endif
+                0
+            };
+            
             lcd_move(0, 0);
-            lcd_printf("F:% 5u %-6s", sensor_a, state_name[state]);
+            lcd_printf("F:% 2u %s %-6s", sensor_a/1000, ab, state_name[state]);
             lcd_move(0, 1);
             lcd_printf("O:%3d" SYM_DEG "C W:%3d" SYM_DEG "C", (int)oil_temperature, (int)water_temperature);
         }
