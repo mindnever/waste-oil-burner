@@ -5,8 +5,16 @@
 
 #include <stdarg.h>
 
-static char vcp_tx_buffer[200];
-static uint8_t vcp_tx_in, vcp_tx_out;
+#define VCP_FIFO_SIZE 300
+
+typedef struct {
+  uint8_t buffer[VCP_FIFO_SIZE];
+  uint16_t in, out;
+} vcp_fifo_t;
+
+static vcp_fifo_t rx_fifo, tx_fifo;
+
+
 
 static CDC_LineEncoding_t LineEncoding = { .BaudRateBPS = 0,
                                            .CharFormat  = CDC_LINEENCODING_OneStopBit,
@@ -14,11 +22,48 @@ static CDC_LineEncoding_t LineEncoding = { .BaudRateBPS = 0,
                                            .DataBits    = 8                            };
 
 
+void fifo_puts(vcp_fifo_t *fifo, const char *buf)
+{
+    char c;
+    while((c = *buf++)) {
+        fifo->buffer[fifo->in++] = c;
+        if(fifo->in == sizeof(fifo->buffer)) {
+          fifo->in = 0;
+        }
+    }
+}
+
+int fifo_write(vcp_fifo_t *fifo, const uint8_t *buf, int len)
+{
+  int i;
+  for(i = 0; i < len; ++i) {
+    fifo->buffer[fifo->in++] = buf[i];
+    if(fifo->in == sizeof(fifo->buffer)) {
+      fifo->in = 0;
+    }
+  }
+  return i;
+}
+
+int fifo_read(vcp_fifo_t *fifo, uint8_t *buf, int len)
+{
+  int i;
+  
+  for(i = 0; (i < len) && (fifo->in != fifo->out); ++i) {
+    buf[i] = fifo->buffer[fifo->out++];
+    if(fifo->out == sizeof(fifo->buffer)) {
+      fifo->out = 0;
+    }
+  }
+  
+  return i;
+}
+
 
 /** Event handler for the USB_ConfigurationChanged event. This is fired when the host set the current configuration
  *  of the USB device after enumeration - the device endpoints are configured and the CDC management task started.
  */
-void EVENT_USB_Device_ConfigurationChanged(void)
+bool VCP_EVENT_USB_Device_ConfigurationChanged(void)
 {
 	bool ConfigSuccess = true;
 
@@ -32,13 +77,15 @@ void EVENT_USB_Device_ConfigurationChanged(void)
 
 	/* Indicate endpoint configuration success or failure */
 //	LEDs_SetAllLEDs(ConfigSuccess ? LEDMASK_USB_READY : LEDMASK_USB_ERROR);
+
+    return ConfigSuccess;
 }
 
 /** Event handler for the USB_ControlRequest event. This is used to catch and process control requests sent to
  *  the device from the USB host before passing along unhandled control requests to the library for processing
  *  internally.
  */
-void EVENT_USB_Device_ControlRequest(void)
+void VCP_EVENT_USB_Device_ControlRequest(void)
 {
 	/* Process CDC specific control requests */
 	switch (USB_ControlRequest.bRequest)
@@ -62,12 +109,15 @@ void EVENT_USB_Device_ControlRequest(void)
 				/* Read the line coding data in from the host into the global struct */
 				Endpoint_Read_Control_Stream_LE(&LineEncoding, sizeof(CDC_LineEncoding_t));
 				Endpoint_ClearIN();
+                
+                EVENT_VCP_SetLineEncoding(&LineEncoding);
 			}
 
 			break;
 		case CDC_REQ_SetControlLineState:
 			if (USB_ControlRequest.bmRequestType == (REQDIR_HOSTTODEVICE | REQTYPE_CLASS | REQREC_INTERFACE))
 			{
+			        uint16_t wValue = USB_ControlRequest.wValue;
 				Endpoint_ClearSETUP();
 				Endpoint_ClearStatusStage();
 
@@ -75,6 +125,7 @@ void EVENT_USB_Device_ControlRequest(void)
 				         lines. The mask is read in from the wValue parameter in USB_ControlRequest, and can be masked against the
 						 CONTROL_LINE_OUT_* masks to determine the RTS and DTR line states using the following code:
 				*/
+				EVENT_VCP_SetControlLineState(wValue);
 			}
 
 			break;
@@ -88,7 +139,7 @@ void VCP_Task(void)
 	if (USB_DeviceState != DEVICE_STATE_Configured)
 	  return;
 
-	if ((vcp_tx_in != vcp_tx_out) && LineEncoding.BaudRateBPS)
+	if ((tx_fifo.in != tx_fifo.out) && LineEncoding.BaudRateBPS)
 	{
             /* Select the Serial Tx Endpoint */
             Endpoint_SelectEndpoint(CDC_TX_EPADDR);
@@ -96,36 +147,39 @@ void VCP_Task(void)
 	    uint16_t bytes_processed;
 	    uint16_t to_write;
 	    
-            if(vcp_tx_out > vcp_tx_in) {
+	    GlobalInterruptDisable();
+	    
+            if(tx_fifo.out > tx_fifo.in) {
               // write everything until end
-              to_write = sizeof(vcp_tx_buffer) - vcp_tx_out;
+              to_write = sizeof(tx_fifo.buffer) - tx_fifo.out;
               
               bytes_processed = 0;
-              if(Endpoint_Write_Stream_LE(&vcp_tx_buffer[vcp_tx_out], to_write, &bytes_processed) == ENDPOINT_RWSTREAM_IncompleteTransfer) {
-                vcp_tx_out += bytes_processed;
+              if(Endpoint_Write_Stream_LE(&tx_fifo.buffer[tx_fifo.out], to_write, &bytes_processed) == ENDPOINT_RWSTREAM_IncompleteTransfer) {
+                tx_fifo.out += bytes_processed;
               } else {
-                vcp_tx_out += to_write;
+                tx_fifo.out += to_write;
               }
 
-              if(vcp_tx_out >= sizeof(vcp_tx_buffer)) {
-                vcp_tx_out = 0;
+              if(tx_fifo.out >= sizeof(tx_fifo.buffer)) {
+                tx_fifo.out = 0;
               }
             }
 
-            if(vcp_tx_out < vcp_tx_in) {
-              to_write = vcp_tx_in - vcp_tx_out;
+            if(tx_fifo.out < tx_fifo.in) {
+              to_write = tx_fifo.in - tx_fifo.out;
               bytes_processed = 0;
 
-              if(Endpoint_Write_Stream_LE(&vcp_tx_buffer[vcp_tx_out], to_write, &bytes_processed) == ENDPOINT_RWSTREAM_IncompleteTransfer) {
-                vcp_tx_out += bytes_processed;
+              if(Endpoint_Write_Stream_LE(&tx_fifo.buffer[tx_fifo.out], to_write, &bytes_processed) == ENDPOINT_RWSTREAM_IncompleteTransfer) {
+                tx_fifo.out += bytes_processed;
               } else {
-                vcp_tx_out += to_write;
+                tx_fifo.out += to_write;
               }
               
-              if(vcp_tx_out >= sizeof(vcp_tx_buffer)) {
-                vcp_tx_out = 0;
+              if(tx_fifo.out >= sizeof(tx_fifo.buffer)) {
+                tx_fifo.out = 0;
               }
             }
+            GlobalInterruptEnable();
 
             /* Remember if the packet to send completely fills the endpoint */
             bool IsFull = (Endpoint_BytesInEndpoint() == CDC_TXRX_EPSIZE);
@@ -148,15 +202,44 @@ void VCP_Task(void)
 	/* Select the Serial Rx Endpoint */
 	Endpoint_SelectEndpoint(CDC_RX_EPADDR);
 
-	/* Throw away any received data from the host */
-	if (Endpoint_IsOUTReceived())
+	if (Endpoint_IsOUTReceived()) {
+	  
+	  uint16_t DataLength = Endpoint_BytesInEndpoint();
+	  
+	  uint8_t Buffer[DataLength];
+
+	  Endpoint_Read_Stream_LE(&Buffer, DataLength, NULL);
+
+	  GlobalInterruptDisable();
+          fifo_write(&rx_fifo, Buffer, DataLength);
+          GlobalInterruptEnable();
+
 	  Endpoint_ClearOUT();
+	  
+	  EVENT_VCP_DataReceived();
+        }
+}
+
+
+int VCP_Write(uint8_t *buf, int len)
+{
+  return fifo_write(&tx_fifo, buf, len);
+}
+
+int VCP_Read(uint8_t *buf, int len)
+{
+  return fifo_read(&rx_fifo, buf, len);
+}
+
+void VCP_Puts(const char *str)
+{
+    fifo_puts(&tx_fifo, str);
 }
 
 void VCP_Printf(const char *fmt, ...)
 {
   va_list ap;
-  char tmp[256];
+  char tmp[128];
   
   va_start(ap, fmt);
   
@@ -164,14 +247,7 @@ void VCP_Printf(const char *fmt, ...)
   
   tmp[sizeof(tmp) - 1] = 0;
   
-  uint8_t l = strlen(tmp);
+  fifo_puts(&tx_fifo, tmp);
 
-  for(uint8_t i = 0; i < l; ++i) {
-    vcp_tx_buffer[vcp_tx_in++] = tmp[i];
-    if(vcp_tx_in == sizeof(vcp_tx_buffer)) {
-      vcp_tx_in = 0;
-    }
-  }
-  
   va_end(ap);
 }

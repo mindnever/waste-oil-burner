@@ -18,12 +18,36 @@
 		5945F7321FFB8308004ED194 /* vcp.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = vcp.c; sourceTree = "<group>"; };
 		5945F7331FFB8308004ED194 /* Makefile */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.make; path = Makefile; sourceTree = "<group>"; };
 		5945F7341FFB8308004ED194 /* checksize */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.sh; path = checksize; sourceTree = "<group>"; };
+		595CEED2217EA6B500E96A48 /* microrl.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = microrl.c; sourceTree = "<group>"; };
+		595CEED3217EA6B500E96A48 /* config.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = config.h; sourceTree = "<group>"; };
+		595CEED4217EA6B500E96A48 /* microrl.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = microrl.h; sourceTree = "<group>"; };
+		595CEED5217EA9CB00E96A48 /* usb.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = usb.h; sourceTree = "<group>"; };
+		595CEED6217EA9CB00E96A48 /* usb.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = usb.c; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
+		595CEED0217EA69800E96A48 /* microrl */ = {
+			isa = PBXGroup;
+			children = (
+				595CEED1217EA6A500E96A48 /* src */,
+			);
+			path = microrl;
+			sourceTree = "<group>";
+		};
+		595CEED1217EA6A500E96A48 /* src */ = {
+			isa = PBXGroup;
+			children = (
+				595CEED3217EA6B500E96A48 /* config.h */,
+				595CEED2217EA6B500E96A48 /* microrl.c */,
+				595CEED4217EA6B500E96A48 /* microrl.h */,
+			);
+			path = src;
+			sourceTree = "<group>";
+		};
 		59DD5AA91FFB82B900AD8971 = {
 			isa = PBXGroup;
 			children = (
+				595CEED0217EA69800E96A48 /* microrl */,
 				5945F72A1FFB8308004ED194 /* lcd.h */,
 				5945F72B1FFB8308004ED194 /* twi.h */,
 				5945F72C1FFB8308004ED194 /* usb_descriptors.h */,
@@ -32,6 +56,8 @@
 				5945F72F1FFB8308004ED194 /* main.c */,
 				5945F7301FFB8308004ED194 /* twi.c */,
 				5945F7311FFB8308004ED194 /* usb_descriptors.c */,
+				595CEED6217EA9CB00E96A48 /* usb.c */,
+				595CEED5217EA9CB00E96A48 /* usb.h */,
 				5945F7321FFB8308004ED194 /* vcp.c */,
 				5945F7331FFB8308004ED194 /* Makefile */,
 				5945F7341FFB8308004ED194 /* checksize */,

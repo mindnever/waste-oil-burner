@@ -16,7 +16,7 @@ DEFINES += -DF_CPU=$(F_CPU)
 
 BOARD = PROMICRO
 
-OBJECTS = main.o usb_descriptors.o vcp.o twi.o lcd.o
+OBJECTS = main.o usb_descriptors.o vcp.o usb.o twi.o lcd.o microrl/src/microrl.o
 
 LUFA_PATH = /Users/mr_w/Workspace/avr/lufa-build
 
@@ -26,7 +26,7 @@ LUFA_LIBS = $(LUFA_PATH)/obj/*.o
 
 
 COMPILE = avr-gcc -Wall -O2 -std=gnu99 -I. -mmcu=$(DEVICE) $(DEFINES) $(LUFA_CFLAGS) -ffunction-sections -fdata-sections -funsigned-char -funsigned-bitfields -fpack-struct -fshort-enums -ffreestanding
-LINK = avr-gcc $(LUFA_LIBS)  -Wl,--gc-sections -Wl,--relax -mmcu=$(DEVICE)
+LINK = avr-gcc $(LUFA_LIBS)  -Wl,--gc-sections -Wl,--relax -mmcu=$(DEVICE) -Wl,-u,vfprintf -lprintf_flt -lm
 
 # symbolic targets:
 all:	firmware.hex
@@ -65,7 +65,7 @@ fuse:
 
 
 clean:
-	rm -f firmware.lst firmware.obj firmware.cof firmware.list firmware.map firmware.eep.hex firmware.bin *.o usbdrv/*.o firmware.s usbdrv/oddebug.s usbdrv/usbdrv.s
+	rm -f firmware.lst firmware.obj firmware.cof firmware.list firmware.map firmware.eep.hex firmware.bin $(OBJECTS) usbdrv/*.o firmware.s usbdrv/oddebug.s usbdrv/usbdrv.s
 
 # file targets:
 firmware.bin:	$(OBJECTS)

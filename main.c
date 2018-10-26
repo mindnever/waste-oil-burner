@@ -4,6 +4,7 @@
 
 #include "usb_descriptors.h"
 #include "vcp.h"
+#include "usb.h"
 #include "twi.h"
 #include "lcd.h"
 
@@ -11,33 +12,46 @@
 #include <LUFA/Drivers/USB/USB.h>
 #include <LUFA/Platform/Platform.h>
 
+#include "microrl/src/microrl.h"
+
 #define SYM_DEG "\xdf"
 
+
+// LCD
+// PD0 (D3) - SCL
+// PD1 (D2)- SDA
+
+
+// flame sensor (PF4, PROMICRO A3, 10kΩ resistor from vcc to sensor, sensor to ground)
 #define SENSOR_A_PORT F
 #define SENSOR_A_PIN 4
 #define SENSOR_A_ADCMUX 4
 #define SENSOR_A_DIDR0 4
 
+// oil_temperature (PF5, PROMICRO A2, 220Ω from vcc to sensor, sensor to ground)
 #define SENSOR_B_PORT F
 #define SENSOR_B_PIN 5
 #define SENSOR_B_ADCMUX 5
 #define SENSOR_B_DIDR0 5
 
-// reset button
-#define BUTTON_A_PORT F
-#define BUTTON_A_PIN 6
-
-// external thermostat trigger
-#define BUTTON_B_PORT B
-#define BUTTON_B_PIN 2
-
+// water temperature (PF7, PROMICRO A0, 220Ω from vcc to sensor, sensor to ground)
 #define SENSOR_C_PORT F
 #define SENSOR_C_PIN 7
 #define SENSOR_C_ADCMUX 7
 #define SENSOR_C_DIDR0 7
 
+// reset button (PF6, PROMICRO A1)
+#define BUTTON_A_PORT F
+#define BUTTON_A_PIN 6
+
+// external thermostat trigger (PB2, PROMICRO MOSI, D16)
+#define BUTTON_B_PORT B
+#define BUTTON_B_PIN 2
+
+
 #define LED_A_PORT B
 #define LED_A_PIN 0
+
 #define LED_B_PORT D
 #define LED_B_PIN 5
 
@@ -45,26 +59,31 @@
 // PROMICRO:
 // PD4, PC6, PD7, PE6
 
-// K1 - aux - PD4
-// K2 - fan - PC6
-// K3 - air - PD7
-// K4 - spark - PE6
+// K1 - heater - PD4
+// K2 - fan    - PC6
+// K3 - air    - PD7
+// K4 - spark  - PE6
 
 
+// K1, PD4, PROMICRO D4
+#define RELAY_HEATER_PORT D
+#define RELAY_HEATER_PIN  4
+
+// K2, PC6, PROMICRO D5
 #define RELAY_FAN_PORT C
-#define RELAY_FAN_PIN 6
+#define RELAY_FAN_PIN  6
+
+// K3, PD7, PROMICRO D6
 #define RELAY_AIR_PORT D
 #define RELAY_AIR_PIN  7
+
+// K4, PE6, PROMICRO D7
 #define RELAY_SPARK_PORT E
 #define RELAY_SPARK_PIN  6
-#define RELAY_HEATER_PORT D
-#define RELAY_HEATER_PIN 4
 
 
-// Arduino A3
+//////
 #define IS_BURNING() (sensor_a < 61000)
-
-// Arduino A2
 #define TEMP_SENSOR(x) (-0.001958311*(float)(x) + 129.5639)
 
 
@@ -74,11 +93,11 @@
 #define OIL_TEMP_HYST 1
 #define WATER_TEMP_HYST 15
 
-#define IS_OIL_HOT() (oil_temperature > target_oil_temperature)
-#define IS_OIL_COLD() (oil_temperature < (target_oil_temperature - OIL_TEMP_HYST))
+#define IS_OIL_HOT() (oil_temperature > config.target_oil_temperature)
+#define IS_OIL_COLD() (oil_temperature < (config.target_oil_temperature - config.oil_temp_hyst))
 
-#define IS_WATER_HOT() (water_temperature > target_water_temperature)
-#define IS_WATER_COLD() (water_temperature < (target_water_temperature - WATER_TEMP_HYST))
+#define IS_WATER_HOT() (water_temperature > config.target_water_temperature)
+#define IS_WATER_COLD() (water_temperature < (config.target_water_temperature - config.water_temp_hyst))
 
 #define IS_PRESSED(b) ((b) == BUTTON_DEBOUNCE)
 
@@ -163,11 +182,26 @@ typedef enum
     blink_on
 } blink_t;
 
-static float target_oil_temperature = TARGET_OIL_TEMPERATURE;
-static float target_water_temperature = TARGET_WATER_TEMPERATURE;
+struct {
+    float target_oil_temperature;
+    float target_water_temperature;
+    float oil_temp_hyst;
+    float water_temp_hyst;
+} config = {
+    .target_oil_temperature = TARGET_OIL_TEMPERATURE,
+    .target_water_temperature = TARGET_WATER_TEMPERATURE,
+
+    .oil_temp_hyst = OIL_TEMP_HYST,
+    .water_temp_hyst = WATER_TEMP_HYST,
+};
+
 
 static uint8_t led_a = blink_off;
 static uint8_t led_b = blink_off;
+
+static uint8_t monitor_mode = 0;
+
+static microrl_t mrl;
 
 uint8_t led_state(blink_t b, uint8_t slow, uint8_t fast)
 {
@@ -203,6 +237,43 @@ void handle_led()
         LED_ON( LED_B );
     } else {
         LED_OFF( LED_B );
+    }
+}
+
+static int CLI_Execute(int argc, const char * const *argv)
+{
+    if(!strcasecmp(argv[0], "monitor")) {
+        monitor_mode = 1;
+        VCP_Printf("Monitor mode on\r\n");
+    } else if(!strcasecmp(argv[0], "config")) {
+        VCP_Printf("target_oil_temperature=%.1f\r\n", config.target_oil_temperature);
+        VCP_Printf("target_water_temperature=%.1f\r\n", config.target_water_temperature);
+        VCP_Printf("oil_temp_hyst=%.1f\r\n", config.oil_temp_hyst);
+        VCP_Printf("water_temp_hyst=%.1f\r\n", config.water_temp_hyst);
+    }
+    return 0;
+}
+
+static char ** CLI_GetCompletion(int argc, const char * const *argv)
+{
+    static char *tok = 0;
+    return &tok;
+}
+
+static void CLI_Task()
+{
+    uint8_t cmdBuf[64];
+
+    uint16_t r = VCP_Read(cmdBuf, sizeof(cmdBuf) - 1);
+
+    if (r > 0) {
+        if(monitor_mode) {
+            monitor_mode = false;
+            VCP_Printf("Monitor mode off\r\n");
+        }
+        for(uint16_t i = 0; i < r; ++i) {
+            microrl_insert_char(&mrl, cmdBuf[i]);
+        }
     }
 }
 
@@ -267,6 +338,8 @@ static void IO_Init()
 #endif
 }
 
+
+
 int main(void)
 {
     wdt_enable(WDTO_1S);
@@ -274,7 +347,10 @@ int main(void)
     USB_Init();
     
     IO_Init();
-    
+
+    microrl_init(&mrl, VCP_Puts);
+    microrl_set_execute_callback(&mrl, CLI_Execute);
+    microrl_set_complete_callback(&mrl, CLI_GetCompletion);
     
     RELAY_OFF( RELAY_HEATER );
     RELAY_OFF( RELAY_FAN );
@@ -320,8 +396,9 @@ int main(void)
     {
         wdt_reset();
         
-        USB_USBTask();
-        VCP_Task();
+        USB_Task();
+        
+        CLI_Task();
         
         handle_led();
         
@@ -370,7 +447,9 @@ int main(void)
                 lcd_init();
             }
             
-            VCP_Printf("State:%d [%s], s_A:%u, s_B:%u, s_C:%u, t_Oil:%d, t_Water:%d, Flame:%d IgnCount:%d\r\n", state, state_name[state], sensor_a, sensor_b, sensor_c, (int)oil_temperature, (int)water_temperature, (int)burning, (int)ignition_count);
+            if(monitor_mode) { // TODO: output JSON for MQTT
+                VCP_Printf("State:%d [%s], s_A:%u, s_B:%u, s_C:%u, t_Oil:%.1f, t_Water:%.1f, Flame:%d IgnCount:%d\r\n", state, state_name[state], sensor_a, sensor_b, sensor_c, oil_temperature, water_temperature, (int)burning, (int)ignition_count);
+            }
             status = 0;
 
             char ab[3] = {
@@ -557,3 +636,27 @@ int main(void)
     
     
 }
+
+
+void EVENT_VCP_SetLineEncoding(CDC_LineEncoding_t *LineEncoding)
+{
+}
+
+
+void EVENT_VCP_DataReceived()
+{
+}
+
+void EVENT_VCP_SetControlLineState(uint16_t State)
+{
+  if(State & CDC_CONTROL_LINE_OUT_RTS)
+  {
+
+  }
+  else
+  {
+
+  }
+}
+
+
