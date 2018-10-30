@@ -2,11 +2,15 @@
 #include <util/delay.h>
 #include <avr/wdt.h>
 
+#include "hw.h"
+
 #include "usb_descriptors.h"
 #include "vcp.h"
 #include "usb.h"
 #include "twi.h"
 #include "lcd.h"
+#include "led.h"
+#include "rx.h"
 
 #include <LUFA/Drivers/Board/LEDs.h>
 #include <LUFA/Drivers/USB/USB.h>
@@ -16,70 +20,6 @@
 
 #define SYM_DEG "\xdf"
 
-
-// LCD
-// PD0 (D3) - SCL
-// PD1 (D2)- SDA
-
-
-// flame sensor (PF4, PROMICRO A3, 10kΩ resistor from vcc to sensor, sensor to ground)
-#define SENSOR_A_PORT F
-#define SENSOR_A_PIN 4
-#define SENSOR_A_ADCMUX 4
-#define SENSOR_A_DIDR0 4
-
-// oil_temperature (PF5, PROMICRO A2, 220Ω from vcc to sensor, sensor to ground)
-#define SENSOR_B_PORT F
-#define SENSOR_B_PIN 5
-#define SENSOR_B_ADCMUX 5
-#define SENSOR_B_DIDR0 5
-
-// water temperature (PF7, PROMICRO A0, 220Ω from vcc to sensor, sensor to ground)
-#define SENSOR_C_PORT F
-#define SENSOR_C_PIN 7
-#define SENSOR_C_ADCMUX 7
-#define SENSOR_C_DIDR0 7
-
-// reset button (PF6, PROMICRO A1)
-#define BUTTON_A_PORT F
-#define BUTTON_A_PIN 6
-
-// external thermostat trigger (PB2, PROMICRO MOSI, D16)
-#define BUTTON_B_PORT B
-#define BUTTON_B_PIN 2
-
-
-#define LED_A_PORT B
-#define LED_A_PIN 0
-
-#define LED_B_PORT D
-#define LED_B_PIN 5
-
-// Arduino 4, 5, 6, 7
-// PROMICRO:
-// PD4, PC6, PD7, PE6
-
-// K1 - heater - PD4
-// K2 - fan    - PC6
-// K3 - air    - PD7
-// K4 - spark  - PE6
-
-
-// K1, PD4, PROMICRO D4
-#define RELAY_HEATER_PORT D
-#define RELAY_HEATER_PIN  4
-
-// K2, PC6, PROMICRO D5
-#define RELAY_FAN_PORT C
-#define RELAY_FAN_PIN  6
-
-// K3, PD7, PROMICRO D6
-#define RELAY_AIR_PORT D
-#define RELAY_AIR_PIN  7
-
-// K4, PE6, PROMICRO D7
-#define RELAY_SPARK_PORT E
-#define RELAY_SPARK_PIN  6
 
 
 //////
@@ -101,8 +41,6 @@
 
 #define IS_PRESSED(b) ((b) == BUTTON_DEBOUNCE)
 
-#define TICK_MS 10
-
 #define TIMEOUT_FAN   (10000L / TICK_MS)
 #define TIMEOUT_AIR   (150L / TICK_MS)
 #define TIMEOUT_SPARK (6000 / TICK_MS)
@@ -113,41 +51,10 @@
 
 #define IGNITION_RETRY 3
 
-#define TICK_FAST (50/TICK_MS)
-#define TICK_SLOW (500/TICK_MS)
-
 #define FLAME_SENSOR_DELAY (3000/TICK_MS)
 
 #define BUTTON_DEBOUNCE (100/TICK_MS)
 
-#define _CONCAT(a,b) a ## b
-#define _CONCAT3(a,b,c) a ## b ## c
-
-//#define IO_PIN(n) _CONCAT3(IO_, n, _PIN)
-//#define IO_PORTNAME(n) _CONCAT3(IO_, n, _PORT)
-
-#define IO_PIN(n) _CONCAT(n, _PIN)
-#define IO_PORTNAME(n) _CONCAT(n, _PORT)
-#define IO_ADCMUX(n) _CONCAT(n, _ADCMUX)
-#define IO_DIDR0(n) _CONCAT(n, _DIDR0)
-
-#define IO_PORT_OUT(p) _CONCAT(PORT, p)
-#define IO_PORT_IN(p) _CONCAT(PIN, p)
-#define IO_DDR(p)  _CONCAT(DDR, p)
-
-#define IO_PIN_HIGH( n )  { IO_PORT_OUT( IO_PORTNAME( n ) ) |= _BV( IO_PIN( n ) ); }
-
-#define IO_PIN_LOW( n )   { IO_PORT_OUT( IO_PORTNAME( n ) ) &= ~_BV( IO_PIN( n ) ); }
-#define IO_PIN_READ( n ) ( IO_PORT_IN( IO_PORTNAME( n ) ) & _BV( IO_PIN( n ) ) )
-
-#define IO_DIR_IN( n ) { IO_DDR( IO_PORTNAME( n ) ) &= ~_BV( IO_PIN( n ) ); }
-#define IO_DIR_OUT( n ) { IO_DDR( IO_PORTNAME( n ) ) |= _BV( IO_PIN( n ) ); }
-
-#define RELAY_ON(n) IO_PIN_LOW(n)
-#define RELAY_OFF(n) IO_PIN_HIGH(n)
-
-#define LED_ON(n) IO_PIN_LOW(n)
-#define LED_OFF(n) IO_PIN_HIGH(n)
 
 typedef enum
 {
@@ -174,13 +81,6 @@ static const char *state_name[] = {
     "Fault",
 };
 
-typedef enum
-{
-    blink_off,
-    blink_slow,
-    blink_fast,
-    blink_on
-} blink_t;
 
 struct {
     float target_oil_temperature;
@@ -196,49 +96,10 @@ struct {
 };
 
 
-static uint8_t led_a = blink_off;
-static uint8_t led_b = blink_off;
-
 static uint8_t monitor_mode = 0;
 
 static microrl_t mrl;
 
-uint8_t led_state(blink_t b, uint8_t slow, uint8_t fast)
-{
-    if(b == blink_fast) { b = fast ? blink_on : blink_off; }
-    if(b == blink_slow) { b = slow ? blink_on : blink_off; }
-    
-    return b == blink_on;
-}
-
-void handle_led()
-{
-    static uint8_t fast = 0;
-    static uint8_t slow = 0;
-    static uint16_t tick_f = 0, tick_s = 0;
-    
-    if(++tick_f > TICK_FAST) {
-        fast = !fast;
-        tick_f = 0;
-    }
-    
-    if(++tick_s > TICK_SLOW) {
-        slow = !slow;
-        tick_s = 0;
-    }
-    
-    if(led_state( led_a, slow, fast)) {
-        LED_ON( LED_A );
-    } else {
-        LED_OFF( LED_A );
-    }
-    
-    if(led_state( led_b, slow, fast)) {
-        LED_ON( LED_B );
-    } else {
-        LED_OFF( LED_B );
-    }
-}
 
 static int CLI_Execute(int argc, const char * const *argv)
 {
@@ -364,6 +225,7 @@ int main(void)
     
     twi_init();
     lcd_init();
+    RX_Init();
     
     uint32_t timer = 0;
     uint32_t burning = 0;
@@ -396,9 +258,9 @@ int main(void)
     {
         wdt_reset();
         
-        USB_Task();
-        
+        USB_Task();        
         CLI_Task();
+        RX_Task();
         
         handle_led();
         

@@ -43,13 +43,19 @@
 
 	/* Macros: */
 		/** Endpoint address of the CDC device-to-host notification IN endpoint. */
-		#define CDC_NOTIFICATION_EPADDR        (ENDPOINT_DIR_IN  | 2)
+		#define CDC_NOTIFICATION_EPADDR        (ENDPOINT_DIR_IN  | 1)
 
 		/** Endpoint address of the CDC device-to-host data IN endpoint. */
 		#define CDC_TX_EPADDR                  (ENDPOINT_DIR_IN  | 3)
 
 		/** Endpoint address of the CDC host-to-device data OUT endpoint. */
 		#define CDC_RX_EPADDR                  (ENDPOINT_DIR_OUT | 4)
+
+        /** Endpoint address of the Sensor HID reporting IN endpoint. */
+        #define SENSOR_EPADDR                   (ENDPOINT_DIR_IN  | 2)
+
+        /** Size in bytes of the Sensor HID reporting IN endpoint. */
+        #define SENSOR_EPSIZE                  8
 
 		/** Size in bytes of the CDC device-to-host notification IN endpoint. */
 		#define CDC_NOTIFICATION_EPSIZE        8
@@ -66,7 +72,13 @@
 		{
 			USB_Descriptor_Configuration_Header_t    Config;
 
+            // Sensor HID Interface
+            USB_Descriptor_Interface_t               HID_Interface;
+            USB_HID_Descriptor_HID_t                 HID_SensorHID;
+            USB_Descriptor_Endpoint_t                HID_ReportINEndpoint;
+            
 			// CDC Control Interface
+            USB_Descriptor_Interface_Association_t   CDC_IAD;
 			USB_Descriptor_Interface_t               CDC_CCI_Interface;
 			USB_CDC_Descriptor_FunctionalHeader_t    CDC_Functional_Header;
 			USB_CDC_Descriptor_FunctionalACM_t       CDC_Functional_ACM;
@@ -85,8 +97,9 @@
 		 */
 		enum InterfaceDescriptors_t
 		{
-			INTERFACE_ID_CDC_CCI = 0, /**< CDC CCI interface descriptor ID */
-			INTERFACE_ID_CDC_DCI = 1, /**< CDC DCI interface descriptor ID */
+            INTERFACE_ID_HID_SENSOR = 0,
+			INTERFACE_ID_CDC_CCI = 1, /**< CDC CCI interface descriptor ID */
+			INTERFACE_ID_CDC_DCI = 2, /**< CDC DCI interface descriptor ID */
 		};
 
 		/** Enum for the device string descriptor IDs within the device. Each string descriptor should

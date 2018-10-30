@@ -2,7 +2,7 @@
 #define _32U4IR_USB_H_
 
 #define USE_USB_VCP
-// #define USE_USB_HID
+#define USE_USB_HID
 
 void USB_Task(void);
 

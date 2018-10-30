@@ -10,17 +10,19 @@
 # DEFINES += -DBWCT_COMPAT 
 # DEFINES += -DDEBUG_LEVEL=1
 DEVICE=atmega32u4
+FLASH=28672
+RAM=2500
 F_CPU = 16000000
-
+TICK_MS = 10
 DEFINES += -DF_CPU=$(F_CPU)
 
 BOARD = PROMICRO
 
-OBJECTS = main.o usb_descriptors.o vcp.o usb.o twi.o lcd.o microrl/src/microrl.o
+OBJECTS = main.o usb_descriptors.o hid.o vcp.o usb.o twi.o lcd.o rx.o led.o microrl/src/microrl.o
 
 LUFA_PATH = /Users/mr_w/Workspace/avr/lufa-build
 
-LUFA_CFLAGS = -I$(LUFA_PATH) -DARCH=ARCH_AVR8 -DBOARD=BOARD_$(BOARD) -DF_USB=$(F_CPU)UL -DUSE_LUFA_CONFIG_HEADER -I$(LUFA_PATH)/Config/
+LUFA_CFLAGS = -I$(LUFA_PATH) -DARCH=ARCH_AVR8 -DBOARD=BOARD_$(BOARD) -DF_USB=$(F_CPU)UL -DUSE_LUFA_CONFIG_HEADER -I$(LUFA_PATH)/Config/ -DTICK_MS=$(TICK_MS)
 #LUFA_LIBS = -L$(LUFA_PATH) -llufa-$(BOARD)-$(DEVICE)
 LUFA_LIBS = $(LUFA_PATH)/obj/*.o
 
@@ -74,7 +76,7 @@ firmware.bin:	$(OBJECTS)
 firmware.hex:	firmware.bin
 	rm -f firmware.hex firmware.eep.hex
 	avr-objcopy -j .text -j .data -O ihex firmware.bin firmware.hex
-	./checksize firmware.bin 20000 2500
+	./checksize firmware.bin $(FLASH) $(RAM)
 # do the checksize script as our last action to allow successful compilation
 # on Windows with WinAVR where the Unix commands will fail.
 

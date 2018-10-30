@@ -5,7 +5,7 @@
 
 #include <stdarg.h>
 
-#define VCP_FIFO_SIZE 300
+#define VCP_FIFO_SIZE 200
 
 typedef struct {
   uint8_t buffer[VCP_FIFO_SIZE];
