@@ -4,24 +4,30 @@
 #include "HidSensorSpec.h"
 #include "vcp.h"
 
-static bool report_queued = false;
-static uint8_t report_id;
-static USB_Sensor_Data_t queued_report;
+#define REPORT_QUEUE_SIZE 3
 
-static const uint8_t temp_sensor_feature_report[] =
-{
-  HID_SENSOR_VALUE_SIZE_32(100), /* report interval (ms) */
-  HID_SENSOR_VALUE_SIZE_16(150 * 100), /* maximum sensor value (150C) */
-  HID_SENSOR_VALUE_SIZE_16(-50 * 100), /* minimum sensor value (-50C) */
+struct ReportItem {
+  uint8_t id;
+  uint8_t size;
+  union {
+    HID_RfRx_Report_02_t r02;
+    HID_WOB_Report_03_t r03;
+  } data;
 };
 
-void HID_Report(uint8_t id, USB_Sensor_Data_t *r)
+static struct ReportItem queued[ REPORT_QUEUE_SIZE ];
+
+void HID_Report(uint8_t id, const void *data, uint8_t size)
 {
-  if(!report_queued) {
-    memcpy(&queued_report, r, sizeof(queued_report));
-    report_id = id;
-    report_queued = true;
+  for(uint8_t i = 0; i < REPORT_QUEUE_SIZE; ++i) {
+    if(queued[i].size == 0) {
+      memcpy(&queued[i].data, data, size);
+      queued[i].id = id;
+      queued[i].size = size;
+      break;
+    }
   }
+// queue overflow.
 }
 
 /** LUFA HID Class driver interface configuration and state information. This structure is
@@ -42,8 +48,6 @@ USB_ClassInfo_HID_Device_t Sensor_HID_Interface =
                 .PrevReportINBufferSize         = SENSOR_EPSIZE,
 			},
 	};
-
-
 
 void HID_Task()
 {
@@ -87,17 +91,20 @@ bool CALLBACK_HID_Device_CreateHIDReport(USB_ClassInfo_HID_Device_t* const HIDIn
 {
     switch(ReportType) {
         case HID_REPORT_ITEM_In:
-            if(report_queued) {
-                memcpy(ReportData, &queued_report, sizeof(queued_report));
-                *ReportSize = sizeof(queued_report);
-            
-                report_queued = false;
+            *ReportSize = 0;
+            for(uint8_t i = 0; i < REPORT_QUEUE_SIZE; ++i) {
+              if(queued[i].size) {
+                memcpy(ReportData, &queued[i].data, queued[i].size);
+                *ReportSize = queued[i].size;
+                *ReportID = queued[i].id;
+                queued[i].size = 0;
+                break;
+              }
             }
+
             break;
         
-        case HID_REPORT_ITEM_Feature:
-            memcpy(ReportData, &temp_sensor_feature_report, sizeof(temp_sensor_feature_report));
-            *ReportSize = sizeof(temp_sensor_feature_report);
+        case HID_REPORT_ITEM_Feature: // unsupported
             break;
 	}
 
@@ -118,5 +125,4 @@ void CALLBACK_HID_Device_ProcessHIDReport(USB_ClassInfo_HID_Device_t* const HIDI
                                           const void* ReportData,
                                           const uint16_t ReportSize)
 {
-//  VCP_Printf("ProcessHIDReport: id %d, reportSize: %d\r\n", ReportID, ReportSize);
 }

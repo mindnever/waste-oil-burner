@@ -79,7 +79,7 @@
 
 #define RELAY_ON(n) IO_PIN_LOW(n)
 #define RELAY_OFF(n) IO_PIN_HIGH(n)
-
+#define RELAY_STATE(n) (!IO_PIN_READ(n))
 
 #define LED_ON(n) IO_PIN_LOW(n)
 #define LED_OFF(n) IO_PIN_HIGH(n)

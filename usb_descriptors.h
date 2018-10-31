@@ -36,6 +36,8 @@
 #ifndef _DESCRIPTORS_H_
 #define _DESCRIPTORS_H_
 
+#include "hid.h"
+
 	/* Includes: */
 		#include <avr/pgmspace.h>
 
@@ -55,7 +57,7 @@
         #define SENSOR_EPADDR                   (ENDPOINT_DIR_IN  | 2)
 
         /** Size in bytes of the Sensor HID reporting IN endpoint. */
-        #define SENSOR_EPSIZE                  8
+        #define SENSOR_EPSIZE                  (sizeof(HID_Report_Storage_t) + 1)
 
 		/** Size in bytes of the CDC device-to-host notification IN endpoint. */
 		#define CDC_NOTIFICATION_EPSIZE        8

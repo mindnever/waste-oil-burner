@@ -5,14 +5,36 @@
 
 #include <stdarg.h>
 
-#define VCP_FIFO_SIZE 200
+#define VCP_RX_FIFO_SIZE 64
+#define VCP_TX_FIFO_SIZE 200
 
 typedef struct {
-  uint8_t buffer[VCP_FIFO_SIZE];
   uint16_t in, out;
+  uint16_t size;
+  uint8_t buffer[0];
 } vcp_fifo_t;
 
-static vcp_fifo_t rx_fifo, tx_fifo;
+static struct {
+  vcp_fifo_t fifo;
+  uint8_t _alloc[VCP_RX_FIFO_SIZE];
+} rx = { 
+  .fifo = {
+    .in = 0,
+    .out = 0,
+    .size = VCP_RX_FIFO_SIZE,
+  }
+};
+
+static struct {
+  vcp_fifo_t fifo;
+  uint8_t _alloc[VCP_TX_FIFO_SIZE];
+} tx = { 
+  .fifo = {
+    .in = 0,
+    .out = 0,
+    .size = VCP_TX_FIFO_SIZE,
+  }
+};
 
 
 
@@ -27,7 +49,7 @@ void fifo_puts(vcp_fifo_t *fifo, const char *buf)
     char c;
     while((c = *buf++)) {
         fifo->buffer[fifo->in++] = c;
-        if(fifo->in == sizeof(fifo->buffer)) {
+        if(fifo->in == fifo->size) {
           fifo->in = 0;
         }
     }
@@ -38,7 +60,7 @@ int fifo_write(vcp_fifo_t *fifo, const uint8_t *buf, int len)
   int i;
   for(i = 0; i < len; ++i) {
     fifo->buffer[fifo->in++] = buf[i];
-    if(fifo->in == sizeof(fifo->buffer)) {
+    if(fifo->in == fifo->size) {
       fifo->in = 0;
     }
   }
@@ -51,7 +73,7 @@ int fifo_read(vcp_fifo_t *fifo, uint8_t *buf, int len)
   
   for(i = 0; (i < len) && (fifo->in != fifo->out); ++i) {
     buf[i] = fifo->buffer[fifo->out++];
-    if(fifo->out == sizeof(fifo->buffer)) {
+    if(fifo->out == fifo->size) {
       fifo->out = 0;
     }
   }
@@ -139,7 +161,7 @@ void VCP_Task(void)
 	if (USB_DeviceState != DEVICE_STATE_Configured)
 	  return;
 
-	if ((tx_fifo.in != tx_fifo.out) && LineEncoding.BaudRateBPS)
+	if ((tx.fifo.in != tx.fifo.out) && LineEncoding.BaudRateBPS)
 	{
             /* Select the Serial Tx Endpoint */
             Endpoint_SelectEndpoint(CDC_TX_EPADDR);
@@ -149,34 +171,34 @@ void VCP_Task(void)
 	    
 	    GlobalInterruptDisable();
 	    
-            if(tx_fifo.out > tx_fifo.in) {
+            if(tx.fifo.out > tx.fifo.in) {
               // write everything until end
-              to_write = sizeof(tx_fifo.buffer) - tx_fifo.out;
+              to_write = tx.fifo.size - tx.fifo.out;
               
               bytes_processed = 0;
-              if(Endpoint_Write_Stream_LE(&tx_fifo.buffer[tx_fifo.out], to_write, &bytes_processed) == ENDPOINT_RWSTREAM_IncompleteTransfer) {
-                tx_fifo.out += bytes_processed;
+              if(Endpoint_Write_Stream_LE(&tx.fifo.buffer[tx.fifo.out], to_write, &bytes_processed) == ENDPOINT_RWSTREAM_IncompleteTransfer) {
+                tx.fifo.out += bytes_processed;
               } else {
-                tx_fifo.out += to_write;
+                tx.fifo.out += to_write;
               }
 
-              if(tx_fifo.out >= sizeof(tx_fifo.buffer)) {
-                tx_fifo.out = 0;
+              if(tx.fifo.out >= tx.fifo.size) {
+                tx.fifo.out = 0;
               }
             }
 
-            if(tx_fifo.out < tx_fifo.in) {
-              to_write = tx_fifo.in - tx_fifo.out;
+            if(tx.fifo.out < tx.fifo.in) {
+              to_write = tx.fifo.in - tx.fifo.out;
               bytes_processed = 0;
 
-              if(Endpoint_Write_Stream_LE(&tx_fifo.buffer[tx_fifo.out], to_write, &bytes_processed) == ENDPOINT_RWSTREAM_IncompleteTransfer) {
-                tx_fifo.out += bytes_processed;
+              if(Endpoint_Write_Stream_LE(&tx.fifo.buffer[tx.fifo.out], to_write, &bytes_processed) == ENDPOINT_RWSTREAM_IncompleteTransfer) {
+                tx.fifo.out += bytes_processed;
               } else {
-                tx_fifo.out += to_write;
+                tx.fifo.out += to_write;
               }
               
-              if(tx_fifo.out >= sizeof(tx_fifo.buffer)) {
-                tx_fifo.out = 0;
+              if(tx.fifo.out >= tx.fifo.size) {
+                tx.fifo.out = 0;
               }
             }
             GlobalInterruptEnable();
@@ -211,7 +233,7 @@ void VCP_Task(void)
 	  Endpoint_Read_Stream_LE(&Buffer, DataLength, NULL);
 
 	  GlobalInterruptDisable();
-          fifo_write(&rx_fifo, Buffer, DataLength);
+          fifo_write(&rx.fifo, Buffer, DataLength);
           GlobalInterruptEnable();
 
 	  Endpoint_ClearOUT();
@@ -223,17 +245,17 @@ void VCP_Task(void)
 
 int VCP_Write(uint8_t *buf, int len)
 {
-  return fifo_write(&tx_fifo, buf, len);
+  return fifo_write(&tx.fifo, buf, len);
 }
 
 int VCP_Read(uint8_t *buf, int len)
 {
-  return fifo_read(&rx_fifo, buf, len);
+  return fifo_read(&rx.fifo, buf, len);
 }
 
 void VCP_Puts(const char *str)
 {
-    fifo_puts(&tx_fifo, str);
+    fifo_puts(&tx.fifo, str);
 }
 
 void VCP_Printf(const char *fmt, ...)
@@ -247,7 +269,23 @@ void VCP_Printf(const char *fmt, ...)
   
   tmp[sizeof(tmp) - 1] = 0;
   
-  fifo_puts(&tx_fifo, tmp);
+  fifo_puts(&tx.fifo, tmp);
+
+  va_end(ap);
+}
+
+void VCP_Printf_P(const char *fmt, ...)
+{
+  va_list ap;
+  char tmp[128];
+  
+  va_start(ap, fmt);
+  
+  vsnprintf_P(tmp, sizeof(tmp) - 1, fmt, ap);
+  
+  tmp[sizeof(tmp) - 1] = 0;
+  
+  fifo_puts(&tx.fifo, tmp);
 
   va_end(ap);
 }

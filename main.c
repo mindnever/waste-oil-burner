@@ -105,12 +105,12 @@ static int CLI_Execute(int argc, const char * const *argv)
 {
     if(!strcasecmp(argv[0], "monitor")) {
         monitor_mode = 1;
-        VCP_Printf("Monitor mode on\r\n");
+        VCP_Printf_P(PSTR("Monitor mode on\r\n"));
     } else if(!strcasecmp(argv[0], "config")) {
-        VCP_Printf("target_oil_temperature=%.1f\r\n", config.target_oil_temperature);
-        VCP_Printf("target_water_temperature=%.1f\r\n", config.target_water_temperature);
-        VCP_Printf("oil_temp_hyst=%.1f\r\n", config.oil_temp_hyst);
-        VCP_Printf("water_temp_hyst=%.1f\r\n", config.water_temp_hyst);
+        VCP_Printf_P(PSTR("target_oil_temperature=%.1f\r\n"), config.target_oil_temperature);
+        VCP_Printf_P(PSTR("target_water_temperature=%.1f\r\n"), config.target_water_temperature);
+        VCP_Printf_P(PSTR("oil_temp_hyst=%.1f\r\n"), config.oil_temp_hyst);
+        VCP_Printf_P(PSTR("water_temp_hyst=%.1f\r\n"), config.water_temp_hyst);
     }
     return 0;
 }
@@ -123,15 +123,16 @@ static char ** CLI_GetCompletion(int argc, const char * const *argv)
 
 static void CLI_Task()
 {
-    uint8_t cmdBuf[64];
+    uint8_t cmdBuf[65];
 
-    uint16_t r = VCP_Read(cmdBuf, sizeof(cmdBuf) - 1);
+    uint16_t r = VCP_Read(cmdBuf, sizeof(cmdBuf) - 2);
 
     if (r > 0) {
         if(monitor_mode) {
             monitor_mode = false;
-            VCP_Printf("Monitor mode off\r\n");
+            VCP_Printf_P(PSTR("Monitor mode off\r\n"));
         }
+        cmdBuf[r] = 0;
         for(uint16_t i = 0; i < r; ++i) {
             microrl_insert_char(&mrl, cmdBuf[i]);
         }
@@ -252,7 +253,7 @@ int main(void)
     
     GlobalInterruptEnable();
     
-    VCP_Printf("Booting\r\n");
+    VCP_Printf_P(PSTR("Booting\r\n"));
     
     for(;;)
     {
@@ -310,7 +311,7 @@ int main(void)
             }
             
             if(monitor_mode) { // TODO: output JSON for MQTT
-                VCP_Printf("State:%d [%s], s_A:%u, s_B:%u, s_C:%u, t_Oil:%.1f, t_Water:%.1f, Flame:%d IgnCount:%d\r\n", state, state_name[state], sensor_a, sensor_b, sensor_c, oil_temperature, water_temperature, (int)burning, (int)ignition_count);
+                VCP_Printf_P(PSTR("State:%d [%s], s_A:%u, s_B:%u, s_C:%u, t_Oil:%.1f, t_Water:%.1f, Flame:%d IgnCount:%d\r\n"), state, state_name[state], sensor_a, sensor_b, sensor_c, oil_temperature, water_temperature, (int)burning, (int)ignition_count);
             }
             status = 0;
 
@@ -494,6 +495,45 @@ int main(void)
             state = state_init;
         }
         
+        
+        // HID stuff
+        HID_WOB_Report_03_t report;
+        static HID_WOB_Report_03_t prev_report = { 0 };
+        
+        report.State = state;
+        report.Flame = sensor_a/1000;
+        report.OilTemperature = cpu_to_le16( oil_temperature * 10 );
+        report.WaterTemperature = cpu_to_le16( water_temperature * 10);
+        
+        report.Inputs = 0;
+        if(IS_PRESSED(button_a)) {
+            report.Inputs |= WOB_REPORT_INPUT_BUTTON_A;
+        }
+        if(IS_PRESSED(button_b)) {
+            report.Inputs |= WOB_REPORT_INPUT_BUTTON_B;
+        }
+        if(burning > 0) {
+            report.Inputs |= WOB_REPORT_INPUT_BURNING;
+        }
+        
+        report.Outputs = 0;
+        if(RELAY_STATE(RELAY_HEATER)) {
+            report.Outputs |= WOB_REPORT_OUTPUT_HEATER;
+        }
+        if(RELAY_STATE(RELAY_AIR)) {
+            report.Outputs |= WOB_REPORT_OUTPUT_AIR;
+        }
+        if(RELAY_STATE(RELAY_FAN)) {
+            report.Outputs |= WOB_REPORT_OUTPUT_FAN;
+        }
+        if(RELAY_STATE(RELAY_SPARK)) {
+            report.Outputs |= WOB_REPORT_OUTPUT_SPARK;
+        }
+        
+        if(memcmp(&report, &prev_report, sizeof(report))) {
+            HID_Report(0x03, &report, sizeof(report));
+            memcpy(&prev_report, &report, sizeof(report));
+        }
     }
     
     

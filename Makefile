@@ -20,10 +20,11 @@ BOARD = PROMICRO
 
 OBJECTS = main.o usb_descriptors.o hid.o vcp.o usb.o twi.o lcd.o rx.o led.o microrl/src/microrl.o
 
-LUFA_PATH = /Users/mr_w/Workspace/avr/lufa-build
+DFU_PROGRAMMER=sudo dfu-programmer
+
+LUFA_PATH = ../lufa-build
 
 LUFA_CFLAGS = -I$(LUFA_PATH) -DARCH=ARCH_AVR8 -DBOARD=BOARD_$(BOARD) -DF_USB=$(F_CPU)UL -DUSE_LUFA_CONFIG_HEADER -I$(LUFA_PATH)/Config/ -DTICK_MS=$(TICK_MS)
-#LUFA_LIBS = -L$(LUFA_PATH) -llufa-$(BOARD)-$(DEVICE)
 LUFA_LIBS = $(LUFA_PATH)/obj/*.o
 
 
@@ -77,6 +78,10 @@ firmware.hex:	firmware.bin
 	rm -f firmware.hex firmware.eep.hex
 	avr-objcopy -j .text -j .data -O ihex firmware.bin firmware.hex
 	./checksize firmware.bin $(FLASH) $(RAM)
+
+size:
+	./checksize firmware.bin $(FLASH) $(RAM)
+
 # do the checksize script as our last action to allow successful compilation
 # on Windows with WinAVR where the Unix commands will fail.
 
@@ -87,12 +92,12 @@ avrdude-nodep:
 	avrdude -c usbasp -p atmega8 -U lfuse:w:0x9f:m -U hfuse:w:0xc9:m -U flash:w:firmware.hex
 
 flash: firmware.hex
-	dfu-programmer $(DEVICE) erase || true
-	dfu-programmer $(DEVICE) flash firmware.hex
+	$(DFU_PROGRAMMER) $(DEVICE) erase || true
+	$(DFU_PROGRAMMER) $(DEVICE) flash firmware.hex
 
 launch:
-	dfu-programmer $(DEVICE) launch
-	
+	$(DFU_PROGRAMMER) $(DEVICE) start || true
+
 disasm:	firmware.bin
 	avr-objdump -d firmware.bin
 

@@ -6,6 +6,7 @@
 void VCP_Task(void);
 
 void VCP_Printf(const char *fmt, ...);
+void VCP_Printf_P(const char *fmt, ...);
 
 int VCP_Read(uint8_t *buf, int size);
 int VCP_Write(uint8_t *buf, int size);

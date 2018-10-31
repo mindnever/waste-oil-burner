@@ -3,8 +3,13 @@
 #include <stdlib.h>
 #include "rx.h"
 #include "hw.h"
+#include "usb.h"
 #include "vcp.h"
 #include "led.h"
+
+#ifdef USE_USB_HID
+# include "hid.h"
+#endif
 
 #define TIMER1_PRESCALER_8X _BV(CS11)
 #define TIMER1_CAPTURE_FALLING_EDGE (0)
@@ -161,24 +166,33 @@ struct sensor_data {
   uint8_t humidity;
 };
 
-#if 0
+#ifdef USE_USB_HID
 static void send_hid_report(struct sensor_data *data)
 {
-    USB_Sensor_Data_t report;
+  HID_RfRx_Report_02_t report;
+  
+  report.SensorGUID = cpu_to_le16( (data->channel << 8) | data->sensor_id );
+  report.Temperature = cpu_to_le16( data->temp );
+  report.Humidity = data->humidity;
 
-    report.State = 0x01; /* Ready : HID_USAGE_SENSOR_STATE_READY */
-    report.Event = 0x03; /* Data Updated : HID_USAGE_SENSOR_EVENT_DATA_UPDATED */
-    report.SensorGUID = cpu_to_le16( (data->channel << 8) | data->sensor_id );
-    report.Temperature = cpu_to_le16( data->temp );
-
-    HID_Report(0, &report);
+  HID_Report(0x02, &report, sizeof(report));
 }
 #endif
 
 static void rubicson_decode(packet_t *packet, struct sensor_data *data)
 {
-      /* Nibble 3,4,5 contains 12 bits of temperature
-       * The temperature is signed and scaled by 10 */
+/*
+  ID ID ID CC         8-bit ID, the two least significant might encode the channel
+  BF CC               4 bits of flags:
+                         B  =1 battery good
+                         F  =1 forced transmission
+                         CC =  channel, zero based
+ TT TT TT TT TT TT   12 bits signed integer, temp in Celsius/10
+ 11 11               const / reserved
+ HH HH HH HH         8 bits, either 
+                        - humidity (or 1111 xxxx if not available); or
+                        - a CRC, e.g. Rubicson, algorithm in source code linked above
+*/
 
       data->temp = (int16_t)((uint16_t)(packet->data[1] << 12) | (packet->data[2] << 4));
       data->temp = data->temp >> 4;
@@ -284,7 +298,10 @@ static uint8_t RX_decode()
     
     raw[10] = 0;
 
-    VCP_Printf("{\"signal\":\"%u/%u\",\"batt\":%u,\"sensor_id\":%u,\"temperature\":%d.%u,\"t_%u\":\"%d.%u\",\"humidity\": %u, \"raw\": \"%s\"}\n", hits[maxj], decoded, data.battery, sensor_id , t_int, t_frac,  sensor_id, t_int, t_frac, data.humidity, raw);
+#ifdef USE_USB_HID
+    send_hid_report(&data);
+#endif
+    VCP_Printf_P(PSTR("{\"signal\":\"%u/%u\",\"batt\":%u,\"sensor_id\":%u,\"temperature\":%d.%u,\"t_%u\":\"%d.%u\",\"humidity\": %u, \"raw\": \"%s\"}\r\n"), hits[maxj], decoded, data.battery, sensor_id , t_int, t_frac,  sensor_id, t_int, t_frac, data.humidity, raw);
   }
 
   return decoded;
