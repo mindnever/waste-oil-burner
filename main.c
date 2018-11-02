@@ -785,7 +785,7 @@ void do_hid_report_03()
     if(IS_PRESSED(button_b)) {
         report.Inputs |= WOB_REPORT_INPUT_BUTTON_B;
     }
-    if(burning > 0) {
+    if(IS_BURNING()) {
         report.Inputs |= WOB_REPORT_INPUT_BURNING;
     }
     
