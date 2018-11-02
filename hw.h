@@ -56,14 +56,8 @@
 
 #if 0
 // K1, PD4, PROMICRO D4  (conflict with RF-RX)
-# define RELAY_HEATER_PORT D
-# define RELAY_HEATER_PIN  4
-#else
-// K1, PB4, PROMICRO D8
-# define RELAY_HEATER_PORT B
-# define RELAY_HEATER_PIN  4
-
-#endif
+#define RELAY_HEATER_PORT D
+#define RELAY_HEATER_PIN  4
 
 // K2, PC6, PROMICRO D5
 #define RELAY_FAN_PORT C
@@ -76,6 +70,26 @@
 // K4, PE6, PROMICRO D7
 #define RELAY_SPARK_PORT E
 #define RELAY_SPARK_PIN  6
+
+#else
+
+// K1, PC6, PROMICRO D5
+#define RELAY_HEATER_PORT C
+#define RELAY_HEATER_PIN  6
+
+// K2, PD7, PROMICRO D6
+#define RELAY_FAN_PORT D
+#define RELAY_FAN_PIN  7
+
+// K3, PB5, PROMICRO D9
+#define RELAY_AIR_PORT B
+#define RELAY_AIR_PIN  5
+
+// K4, PB4, PROMICRO D8
+#define RELAY_SPARK_PORT B
+#define RELAY_SPARK_PIN  4
+
+#endif
 
 #define RELAY_ON(n) IO_PIN_LOW(n)
 #define RELAY_OFF(n) IO_PIN_HIGH(n)
