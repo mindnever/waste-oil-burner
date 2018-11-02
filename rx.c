@@ -7,10 +7,6 @@
 #include "vcp.h"
 #include "led.h"
 
-#ifdef USE_USB_HID
-# include "hid.h"
-#endif
-
 #define TIMER1_PRESCALER_8X _BV(CS11)
 #define TIMER1_CAPTURE_FALLING_EDGE (0)
 #define TIMER1_CAPTURE_RISING_EDGE _BV(ICES1)
@@ -32,10 +28,10 @@ static uint16_t rx_current;
 
 static uint8_t timer1_comp;
 
-static uint8_t RX_decode(void);
-// static void RX_dump();
+static uint8_t RfRx_decode(RfRx_Callback cb);
+// static void RfRx_dump();
 
-void RX_Init()
+void RfRx_Init()
 {
   IO_DIR_IN( RX_DATA ); // input
   IO_PIN_HIGH( RX_DATA ); // internal pullup
@@ -51,11 +47,11 @@ void RX_Init()
 
 }
 
-void RX_Task()
+void RfRx_Task(RfRx_Callback cb)
 {
   if(timer1_comp) {
 
-    if((rx_current > 0) && RX_decode()) {
+    if((rx_current > 0) && RfRx_decode(cb)) {
       led_b = blink_pulse;
     }
 
@@ -158,28 +154,7 @@ typedef struct {
 
 #define BURST_LEN 10
 
-struct sensor_data {
-  int16_t temp;
-  uint8_t channel;
-  uint8_t sensor_id;
-  uint8_t battery;
-  uint8_t humidity;
-};
-
-#ifdef USE_USB_HID
-static void send_hid_report(struct sensor_data *data)
-{
-  HID_RfRx_Report_02_t report;
-  
-  report.SensorGUID = cpu_to_le16( (data->channel << 8) | data->sensor_id );
-  report.Temperature = cpu_to_le16( data->temp );
-  report.Humidity = data->humidity;
-
-  HID_Report(0x02, &report, sizeof(report));
-}
-#endif
-
-static void rubicson_decode(packet_t *packet, struct sensor_data *data)
+static void rubicson_decode(packet_t *packet, struct RfRx_SensorData *data)
 {
 /*
   ID ID ID CC         8-bit ID, the two least significant might encode the channel
@@ -204,7 +179,7 @@ static void rubicson_decode(packet_t *packet, struct sensor_data *data)
       data->humidity = ((packet->data[3] & 0x0f) << 4) | (packet->data[4] >> 4);
 }
 
-static uint8_t RX_decode()
+static uint8_t RfRx_decode(RfRx_Callback cb)
 {
   packet_t packet;
   
@@ -215,7 +190,7 @@ static uint8_t RX_decode()
   int8_t bit = -1;
   uint8_t decoded = 0;
   
-  struct sensor_data data;
+  struct RfRx_SensorData data;
   
   memset(&hits, 0, sizeof(hits));
   
@@ -281,34 +256,23 @@ static uint8_t RX_decode()
   }
   
   if(maxj < hcurrent) {
+    
     rubicson_decode(&history[maxj], &data);
-    uint16_t sensor_id = (data.channel << 8) | data.sensor_id;
+    
+    data._raw = history[maxj].data;
+    data._samples = decoded;
+    data._matching = hits[maxj];
 
-    int t_int = data.temp / 10;
-    unsigned t_frac = abs(data.temp % 10);
-    
-    char raw[11];
-    static const char *hex = "0123456789abcdef";
-    
-    for(int j = 0, i = 0; i < sizeof(history[maxj].data); ++i) {
-      uint8_t d = history[maxj].data[i];
-      raw[j++] = hex[d >> 4];
-      raw[j++] = hex[d & 0x0f];
+    if(cb) {
+      cb(&data);
     }
-    
-    raw[10] = 0;
-
-#ifdef USE_USB_HID
-    send_hid_report(&data);
-#endif
-    VCP_Printf_P(PSTR("{\"signal\":\"%u/%u\",\"batt\":%u,\"sensor_id\":%u,\"temperature\":%d.%u,\"t_%u\":\"%d.%u\",\"humidity\": %u, \"raw\": \"%s\"}\r\n"), hits[maxj], decoded, data.battery, sensor_id , t_int, t_frac,  sensor_id, t_int, t_frac, data.humidity, raw);
   }
 
   return decoded;
 }
 
 #if 0
-static void RX_dump()
+static void RfRx_dump()
 {
   
     VCP_Printf("Got %d:", rx_current);

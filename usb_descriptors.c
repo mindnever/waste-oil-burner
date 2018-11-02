@@ -69,6 +69,13 @@ const USB_Descriptor_HIDReport_Datatype_t PROGMEM SensorReportDescriptor[] =
                 HID_RI_USAGE(8, 0),
                 HID_RI_INPUT(8, HID_IOF_DATA | HID_IOF_VARIABLE | HID_IOF_ABSOLUTE | HID_IOF_NO_PREFERRED_STATE),
 
+                // Report ID 4
+                HID_RI_REPORT_SIZE(8, 0x08),
+                HID_RI_REPORT_COUNT(8, sizeof(HID_WOB_Report_04_t)),
+                HID_RI_REPORT_ID(8, 4),
+                HID_RI_USAGE(8, 0),
+                HID_RI_INPUT(8, HID_IOF_DATA | HID_IOF_VARIABLE | HID_IOF_ABSOLUTE | HID_IOF_NO_PREFERRED_STATE),
+
         HID_RI_END_COLLECTION(0),
 };
 

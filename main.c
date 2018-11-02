@@ -1,4 +1,3 @@
-#include <avr/io.h>
 #include <util/delay.h>
 #include <avr/wdt.h>
 
@@ -18,13 +17,19 @@
 
 #include "microrl/src/microrl.h"
 
+#include <stdlib.h>
+
 #define SYM_DEG "\xdf"
 
 
 
 //////
+
+#define ANALOG_SENSOR_DEFAULT_GAIN -0.001958311
+#define ANALOG_SENSOR_DEFAULT_OFFSET 129.5639
+
 #define IS_BURNING() (sensor_a < 61000)
-#define TEMP_SENSOR(x) (-0.001958311*(float)(x) + 129.5639)
+#define TEMP_SENSOR(x) (ANALOG_SENSOR_DEFAULT_GAIN*(float)(x) + ANALOG_SENSOR_DEFAULT_OFFSET)
 
 
 #define TARGET_OIL_TEMPERATURE 90.0
@@ -52,21 +57,21 @@
 #define IGNITION_RETRY 3
 
 #define FLAME_SENSOR_DELAY (3000/TICK_MS)
-
 #define BUTTON_DEBOUNCE (100/TICK_MS)
+#define FORCE_HID_REPORTS (1000/TICK_MS)
 
 
 typedef enum
 {
-    state_init,
-    state_wait,
-    state_preheat,
-    state_fan,
-    state_air,
-    state_spark,
-    state_detect_flame,
-    state_burn,
-    state_fault,
+    state_init, // 0
+    state_wait, // 1
+    state_preheat, // 2
+    state_fan, // 3
+    state_air, // 4
+    state_spark, // 5
+    state_detect_flame, // 6
+    state_burn, // 7
+    state_fault, // 8
 } state_t;
 
 static const char *state_name[] = {
@@ -95,14 +100,248 @@ struct {
     .water_temp_hyst = WATER_TEMP_HYST,
 };
 
+static void on_rfrx_sensor_data(struct RfRx_SensorData *data);
 
-static uint8_t monitor_mode = 0;
+static uint16_t force_hid_reports_counter;
+static uint8_t force_hid_reports;
 
+static void do_hid_report_03();
+static void do_hid_report_04();
+
+static uint8_t monitor_mode;
 static microrl_t mrl;
 
+#ifdef BUTTON_A_PORT
+static int button_a;
+#endif
+#ifdef BUTTON_B_PORT
+static int button_b;
+#endif
+    
+static uint16_t sensor_a;
+static uint16_t sensor_b;
+static uint16_t sensor_c;
+static uint32_t burning;
+static float oil_temperature;
+static float water_temperature;
+static state_t state = state_init;
+
+typedef enum {
+    SENSOR_ANALOG1,
+    SENSOR_ANALOG2,
+    SENSOR_BINARY, /* button_b */
+    SENSOR_RFRX,
+} sensor_type_t;
+
+struct ThermalZone {
+    int16_t SetPoint;
+    int16_t Current;
+    uint8_t Flags; // use hid.h: HID_WOB_Report_04_t Flags values ( WOB_REPORT_FLAGS_CONTROL_ENABLED, WOB_REPORT_FLAGS_OUTPUT_ACTIVE)
+    
+    sensor_type_t _sensor_type;
+
+    union {
+        struct {
+            uint16_t sensor_id;
+        } rfrx;
+        struct {
+            float gain;
+            float offset;
+        } analog;
+    } _config;
+    
+    uint16_t _hysteresis;
+};
+
+static struct ThermalZone *Zones_GetZone(uint8_t id);
+
+#define NUM_EXT_ZONES 4
+
+static struct ThermalZone Zones[ NUM_EXT_ZONES ];
+
+static void Zones_Init()
+{
+    Zones[ 0 ].SetPoint = 200;
+    Zones[ 0 ].Flags = WOB_REPORT_FLAGS_CONTROL_ENABLED;
+    Zones[ 0 ]._sensor_type = SENSOR_BINARY;
+}
+
+static const char *zone_names[] = {
+    "water",
+    "oil",
+    "external_1",
+    "external_2",
+    "external_3",
+    "external_4",
+};
+
+static void Zones_SetCurrent(sensor_type_t type, uint16_t id, int16_t current)
+{
+    for(uint8_t i = 0; i < _WOB_REPORT_ZONE_COUNT; ++i) {
+        struct ThermalZone *zone = Zones_GetZone(i);
+        if(!zone) { continue; }// how can this be? cannot..
+        
+        if((zone->_sensor_type == type)
+        && ((type != SENSOR_RFRX) || (id == zone->_config.rfrx.sensor_id))) {
+            zone->Current = current;
+        }
+    }
+}
+
+static void Zones_Update()
+{
+    for(uint8_t i = 0; i < _WOB_REPORT_ZONE_COUNT; ++i) {
+        struct ThermalZone *zone = Zones_GetZone(i);
+        if(!zone) { continue; }// how can this be? cannot..
+        if(!(zone->Flags & WOB_REPORT_FLAGS_CONTROL_ENABLED)) {
+            zone->Flags &= ~WOB_REPORT_FLAGS_OUTPUT_ACTIVE;
+            continue;
+        }
+        if(zone->Current < (zone->SetPoint - zone->_hysteresis)) {
+            zone->Flags |= WOB_REPORT_FLAGS_OUTPUT_ACTIVE;
+        } else {
+            zone->Flags &= ~WOB_REPORT_FLAGS_OUTPUT_ACTIVE;
+        }
+    }
+}
+
+static void Zones_DumpZone(uint8_t id, struct ThermalZone *zone)
+{
+    VCP_Printf_P(PSTR("Zone %u (%s) is %s\r\n"), id + 1, zone_names[id], (zone->Flags & WOB_REPORT_FLAGS_CONTROL_ENABLED) ? "ENABLED" : "DISABLED");
+    VCP_Printf_P(PSTR("      Output %s\r\n"), (zone->Flags & WOB_REPORT_FLAGS_OUTPUT_ACTIVE) ? "ACTIVE" : "INACTIVE");
+    VCP_Printf_P(PSTR("    SetPoint %.1f\r\n"), (float)zone->SetPoint / 10);
+    VCP_Printf_P(PSTR("     Current %.1f\r\n"), (float)zone->Current / 10);
+    VCP_Printf_P(PSTR("  Hysteresis %.1f\r\n"), (float)zone->_hysteresis / 10);
+    VCP_Printf_P(PSTR("      Sensor "));
+
+    switch(zone->_sensor_type) {
+        case SENSOR_ANALOG1:
+        case SENSOR_ANALOG2:
+            VCP_Printf_P(PSTR("Analog gain=%f offset=%f\r\n"), zone->_config.analog.gain, zone->_config.analog.offset);
+            break;
+        case SENSOR_BINARY:
+            VCP_Printf_P(PSTR("Binary (BUTTON_B)\r\n"));
+            break;
+        case SENSOR_RFRX:
+            VCP_Printf_P(PSTR("RFRX sensor_id=%u\r\n"), zone->_config.rfrx.sensor_id);
+            break;
+        default:
+            VCP_Printf_P(PSTR("unknown?\r\n"));
+    }
+}
+
+struct ThermalZone *Zones_GetZone(uint8_t id)
+{
+    static struct ThermalZone fake;
+    
+    switch(id) {
+        case WOB_REPORT_ZONE_INTERNAL_WATER:
+            fake.SetPoint = config.target_water_temperature * 10;
+            fake.Current = water_temperature * 10;
+            fake.Flags = 0;
+
+            if(IS_PRESSED(button_b)) {
+                fake.Flags |= WOB_REPORT_FLAGS_CONTROL_ENABLED;
+            }
+            
+            if(state == state_preheat
+            || state == state_fan
+            || state == state_air
+            || state == state_spark
+            || state == state_detect_flame
+            || state == state_burn) {
+                fake.Flags |= WOB_REPORT_FLAGS_OUTPUT_ACTIVE;
+            }
+
+            fake._sensor_type = SENSOR_ANALOG1;
+            fake._hysteresis = WATER_TEMP_HYST * 10;
+            fake._config.analog.gain = ANALOG_SENSOR_DEFAULT_GAIN;
+            fake._config.analog.offset = ANALOG_SENSOR_DEFAULT_OFFSET;
+            
+            return &fake;
+        case WOB_REPORT_ZONE_INTERNAL_OIL:
+            fake.SetPoint = config.target_oil_temperature * 10;
+            fake.Current = oil_temperature * 10;
+            fake.Flags = 0;
+
+            if(state != state_init
+            && state != state_wait
+            && state != state_fault) {
+                fake.Flags |= WOB_REPORT_FLAGS_CONTROL_ENABLED;
+            }
+            
+            if(RELAY_STATE(RELAY_HEATER)) {
+                fake.Flags |= WOB_REPORT_FLAGS_OUTPUT_ACTIVE;
+            }
+            
+            fake._sensor_type = SENSOR_ANALOG2;
+            fake._hysteresis = OIL_TEMP_HYST * 10;
+            fake._config.analog.gain = ANALOG_SENSOR_DEFAULT_GAIN;
+            fake._config.analog.offset = ANALOG_SENSOR_DEFAULT_OFFSET;
+            
+            return &fake;
+        case WOB_REPORT_ZONE_EXTERNAL1:
+        case WOB_REPORT_ZONE_EXTERNAL2:
+        case WOB_REPORT_ZONE_EXTERNAL3:
+        case WOB_REPORT_ZONE_EXTERNAL4:
+            return &Zones[ id - WOB_REPORT_ZONE_EXTERNAL1 ];
+            break;
+    }
+
+    return 0;
+}
+
+static void Zones_Dump()
+{
+    for(int i = 0; i < _WOB_REPORT_ZONE_COUNT; ++i) {
+        Zones_DumpZone( i, Zones_GetZone( i ) );
+    }
+}
+
+static void Zones_ZoneCommand(struct ThermalZone *zone, int argc, const char * const *argv)
+{
+    if(!strcasecmp(argv[0], "enable")) {
+        zone->Flags |= WOB_REPORT_FLAGS_CONTROL_ENABLED;
+    } else if(!strcasecmp(argv[0], "disable")) {
+        zone->Flags &= ~WOB_REPORT_FLAGS_CONTROL_ENABLED;
+    } else if(!strcasecmp(argv[0], "setpoint")) {
+        if(argc > 1) {
+            zone->SetPoint = atof(argv[1]) * 10;
+        }
+    } else if(!strcasecmp(argv[0], "sensor")) {
+        if(argc > 1) {
+            if(!strcasecmp(argv[1], "analog1")) {
+                zone->_sensor_type = SENSOR_ANALOG1;
+                zone->_config.analog.gain = ANALOG_SENSOR_DEFAULT_GAIN;
+                zone->_config.analog.offset = ANALOG_SENSOR_DEFAULT_OFFSET;
+            } else if(!strcasecmp(argv[1], "analog2")) {
+                zone->_sensor_type = SENSOR_ANALOG2;
+                zone->_config.analog.gain = ANALOG_SENSOR_DEFAULT_GAIN;
+                zone->_config.analog.offset = ANALOG_SENSOR_DEFAULT_OFFSET;
+            } else if(!strcasecmp(argv[1], "binary")) {
+                zone->_sensor_type = SENSOR_BINARY;
+            } else if(!strcasecmp(argv[1], "rfrx")) {
+                if(argc > 2) {
+                    zone->_sensor_type = SENSOR_RFRX;
+                    zone->_config.rfrx.sensor_id = atoi(argv[2]);
+                }
+            } else {
+                VCP_Printf_P(PSTR("unknown zone sensor type '%s'\r\n"), argv[1]);
+            }
+        }
+    } else if(!strcasecmp(argv[0], "hysteresis")) {
+        if(argc > 1) {
+            zone->_hysteresis = atof(argv[1]) * 10;
+        }
+    } else {
+        VCP_Printf_P(PSTR("unknown zone command '%s'\r\n"), argv[0]);
+    }
+}
 
 static int CLI_Execute(int argc, const char * const *argv)
 {
+    VCP_Printf_P(PSTR("\r\n"));
+
     if(!strcasecmp(argv[0], "monitor")) {
         monitor_mode = 1;
         VCP_Printf_P(PSTR("Monitor mode on\r\n"));
@@ -111,6 +350,29 @@ static int CLI_Execute(int argc, const char * const *argv)
         VCP_Printf_P(PSTR("target_water_temperature=%.1f\r\n"), config.target_water_temperature);
         VCP_Printf_P(PSTR("oil_temp_hyst=%.1f\r\n"), config.oil_temp_hyst);
         VCP_Printf_P(PSTR("water_temp_hyst=%.1f\r\n"), config.water_temp_hyst);
+    } else if(!strcasecmp(argv[0], "zone")) {
+        if(argc > 1) {
+            if(!strcasecmp(argv[1], "print")) {
+                Zones_Dump();
+            } else  {
+                if(argc > 2) {
+                    struct ThermalZone *zone;
+                    if((zone = Zones_GetZone(atoi(argv[1]) - 1))) {
+
+                        Zones_ZoneCommand(zone, argc - 2, argv + 2);
+                        
+                    } else {
+                        VCP_Printf_P(PSTR("zone %s does not exist\r\n"), argv[1]);
+                    }
+                } else {
+                    VCP_Printf_P(PSTR("zone #nr and subcommand required\r\n"));
+                }
+            }
+        } else {
+            VCP_Printf_P(PSTR("%s op required: [ print | enable | disable ]\r\n"), argv[0]);
+        }
+    } else {
+        VCP_Printf_P(PSTR("unknown command '%s'\r\n"), argv[0]);
     }
     return 0;
 }
@@ -209,7 +471,9 @@ int main(void)
     USB_Init();
     
     IO_Init();
-
+    
+    Zones_Init();
+    
     microrl_init(&mrl, VCP_Puts);
     microrl_set_execute_callback(&mrl, CLI_Execute);
     microrl_set_complete_callback(&mrl, CLI_GetCompletion);
@@ -226,30 +490,17 @@ int main(void)
     
     twi_init();
     lcd_init();
-    RX_Init();
+    RfRx_Init();
     
     uint32_t timer = 0;
-    uint32_t burning = 0;
+
     uint32_t status = 0;
     uint32_t lcd_reinit = 0;
     uint8_t ignition_count = 0;
     
-    state_t state = state_init;
     
-#ifdef BUTTON_A_PORT
-    int button_a = 0;
-#endif
-#ifdef BUTTON_B_PORT
-    int button_b = 0;
-#endif
-    
-    uint16_t sensor_a = 0;
-    uint16_t sensor_b = 0;
-    uint16_t sensor_c = 0;
     
     int sensor = 0;
-    float oil_temperature = 0;
-    float water_temperature = 0;
     
     GlobalInterruptEnable();
     
@@ -261,10 +512,18 @@ int main(void)
         
         USB_Task();        
         CLI_Task();
-        RX_Task();
+
+        RfRx_Task( on_rfrx_sensor_data );
         
         handle_led();
         
+        ++force_hid_reports_counter;
+
+        if(force_hid_reports_counter > FORCE_HID_REPORTS) {
+            force_hid_reports = 1;
+            force_hid_reports_counter = 0;
+        }
+
         switch(sensor) {
             default:
                 sensor = 0;
@@ -495,50 +754,128 @@ int main(void)
             state = state_init;
         }
         
+        Zones_SetCurrent(SENSOR_BINARY, 0, IS_PRESSED(button_b) ? 100 : 250);
         
-        // HID stuff
-        HID_WOB_Report_03_t report;
-        static HID_WOB_Report_03_t prev_report = { 0 };
+        Zones_Update();
         
-        report.State = state;
-        report.Flame = sensor_a/1000;
-        report.OilTemperature = cpu_to_le16( oil_temperature * 10 );
-        report.WaterTemperature = cpu_to_le16( water_temperature * 10);
+        do_hid_report_03();
+        do_hid_report_04();
         
-        report.Inputs = 0;
-        if(IS_PRESSED(button_a)) {
-            report.Inputs |= WOB_REPORT_INPUT_BUTTON_A;
-        }
-        if(IS_PRESSED(button_b)) {
-            report.Inputs |= WOB_REPORT_INPUT_BUTTON_B;
-        }
-        if(burning > 0) {
-            report.Inputs |= WOB_REPORT_INPUT_BURNING;
-        }
-        
-        report.Outputs = 0;
-        if(RELAY_STATE(RELAY_HEATER)) {
-            report.Outputs |= WOB_REPORT_OUTPUT_HEATER;
-        }
-        if(RELAY_STATE(RELAY_AIR)) {
-            report.Outputs |= WOB_REPORT_OUTPUT_AIR;
-        }
-        if(RELAY_STATE(RELAY_FAN)) {
-            report.Outputs |= WOB_REPORT_OUTPUT_FAN;
-        }
-        if(RELAY_STATE(RELAY_SPARK)) {
-            report.Outputs |= WOB_REPORT_OUTPUT_SPARK;
-        }
-        
-        if(memcmp(&report, &prev_report, sizeof(report))) {
-            HID_Report(0x03, &report, sizeof(report));
+        force_hid_reports = 0;
+    }
+}
+
+
+void do_hid_report_03()
+{
+// HID stuff, report 03, general state
+
+    HID_WOB_Report_03_t report;
+    static HID_WOB_Report_03_t prev_report = { 0 };
+    
+    report.State = state;
+    report.Flame = sensor_a/1000;
+    report.OilTemperature = cpu_to_le16( oil_temperature * 10 );
+    report.WaterTemperature = cpu_to_le16( water_temperature * 10);
+    
+    report.Inputs = 0;
+    if(IS_PRESSED(button_a)) {
+        report.Inputs |= WOB_REPORT_INPUT_BUTTON_A;
+    }
+    if(IS_PRESSED(button_b)) {
+        report.Inputs |= WOB_REPORT_INPUT_BUTTON_B;
+    }
+    if(burning > 0) {
+        report.Inputs |= WOB_REPORT_INPUT_BURNING;
+    }
+    
+    report.Outputs = 0;
+    if(RELAY_STATE(RELAY_HEATER)) {
+        report.Outputs |= WOB_REPORT_OUTPUT_HEATER;
+    }
+    if(RELAY_STATE(RELAY_AIR)) {
+        report.Outputs |= WOB_REPORT_OUTPUT_AIR;
+    }
+    if(RELAY_STATE(RELAY_FAN)) {
+        report.Outputs |= WOB_REPORT_OUTPUT_FAN;
+    }
+    if(RELAY_STATE(RELAY_SPARK)) {
+        report.Outputs |= WOB_REPORT_OUTPUT_SPARK;
+    }
+    
+    if(force_hid_reports || memcmp(&report, &prev_report, sizeof(report))) {
+        if(HID_Report(0x03, &report, sizeof(report))) {
             memcpy(&prev_report, &report, sizeof(report));
         }
     }
-    
-    
 }
 
+void send_hid_report_04_if_changed(HID_WOB_Report_04_t *report)
+{
+    static HID_WOB_Report_04_t prev_report[_WOB_REPORT_ZONE_COUNT] = { 0 };
+
+    if(report->Zone >= _WOB_REPORT_ZONE_COUNT) {
+        return;
+    }
+    if(force_hid_reports || memcmp(report, &prev_report[report->Zone], sizeof(*report))) {
+        if(HID_Report(0x04, report, sizeof(*report))) {
+            memcpy(&prev_report[report->Zone], report, sizeof(prev_report[report->Zone]));
+        }
+    }
+}
+
+void do_hid_report_04()
+{
+    HID_WOB_Report_04_t report;
+
+    for(uint8_t i = 0; i < _WOB_REPORT_ZONE_COUNT; ++i) {
+        struct ThermalZone *zone = Zones_GetZone(i);
+
+        if(!zone) {
+            continue;
+        }
+        
+        report.Zone = i;
+        report.SetPoint = cpu_to_le16( zone->SetPoint );
+        report.Current = cpu_to_le16( zone->Current );
+        report.Flags = zone->Flags;
+        
+        send_hid_report_04_if_changed(&report);
+    }
+}
+
+void on_rfrx_sensor_data(struct RfRx_SensorData *data)
+{
+    uint16_t sensor_id = (data->channel << 8) | data->sensor_id;
+
+    int t_int = data->temp / 10;
+    unsigned t_frac = abs(data->temp % 10);
+    
+    char raw[11];
+    static const char *hex = "0123456789abcdef";
+    
+    for(int j = 0, i = 0; i < 5; ++i) { // 5 raw bytes
+      uint8_t d = data->_raw[i];
+      raw[j++] = hex[d >> 4];
+      raw[j++] = hex[d & 0x0f];
+    }
+    
+    raw[10] = 0;
+
+    HID_RfRx_Report_02_t report;
+    report.SensorGUID = cpu_to_le16( (data->channel << 8) | data->sensor_id );
+    report.Temperature = cpu_to_le16( data->temp );
+    report.Humidity = data->humidity;
+    report.Battery = data->battery ? 100 : 10;
+    
+    HID_Report(0x02, &report, sizeof(report));
+
+    if(monitor_mode) {
+        VCP_Printf_P(PSTR("{\"signal\":\"%u/%u\",\"batt\":%u,\"sensor_id\":%u,\"temperature\":%d.%u,\"t_%u\":\"%d.%u\",\"humidity\": %u, \"raw\": \"%s\"}\r\n"), data->_matching, data->_samples, data->battery, sensor_id , t_int, t_frac,  sensor_id, t_int, t_frac, data->humidity, raw);
+    }
+
+    Zones_SetCurrent(SENSOR_RFRX, report.SensorGUID, report.Temperature);
+}
 
 void EVENT_VCP_SetLineEncoding(CDC_LineEncoding_t *LineEncoding)
 {

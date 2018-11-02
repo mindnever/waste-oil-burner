@@ -2,11 +2,11 @@
 #include "usb_descriptors.h"
 #include <LUFA/Drivers/USB/USB.h>
 #include <LUFA/Platform/Platform.h>
+#include "led.h"
 
 #include <stdarg.h>
 
 #define VCP_RX_FIFO_SIZE 64
-#define VCP_TX_FIFO_SIZE 200
 
 typedef struct {
   uint16_t in, out;
@@ -25,18 +25,6 @@ static struct {
   }
 };
 
-static struct {
-  vcp_fifo_t fifo;
-  uint8_t _alloc[VCP_TX_FIFO_SIZE];
-} tx = { 
-  .fifo = {
-    .in = 0,
-    .out = 0,
-    .size = VCP_TX_FIFO_SIZE,
-  }
-};
-
-
 
 static CDC_LineEncoding_t LineEncoding = { .BaudRateBPS = 0,
                                            .CharFormat  = CDC_LINEENCODING_OneStopBit,
@@ -44,18 +32,7 @@ static CDC_LineEncoding_t LineEncoding = { .BaudRateBPS = 0,
                                            .DataBits    = 8                            };
 
 
-void fifo_puts(vcp_fifo_t *fifo, const char *buf)
-{
-    char c;
-    while((c = *buf++)) {
-        fifo->buffer[fifo->in++] = c;
-        if(fifo->in == fifo->size) {
-          fifo->in = 0;
-        }
-    }
-}
-
-int fifo_write(vcp_fifo_t *fifo, const uint8_t *buf, int len)
+static int fifo_write(vcp_fifo_t *fifo, const uint8_t *buf, int len)
 {
   int i;
   for(i = 0; i < len; ++i) {
@@ -63,11 +40,15 @@ int fifo_write(vcp_fifo_t *fifo, const uint8_t *buf, int len)
     if(fifo->in == fifo->size) {
       fifo->in = 0;
     }
+
+    if(fifo->in == fifo->out) { // overflow
+      led_a = blink_pulse;
+    }
   }
   return i;
 }
 
-int fifo_read(vcp_fifo_t *fifo, uint8_t *buf, int len)
+static int fifo_read(vcp_fifo_t *fifo, uint8_t *buf, int len)
 {
   int i;
   
@@ -161,66 +142,6 @@ void VCP_Task(void)
 	if (USB_DeviceState != DEVICE_STATE_Configured)
 	  return;
 
-	if ((tx.fifo.in != tx.fifo.out) && LineEncoding.BaudRateBPS)
-	{
-            /* Select the Serial Tx Endpoint */
-            Endpoint_SelectEndpoint(CDC_TX_EPADDR);
-	    
-	    uint16_t bytes_processed;
-	    uint16_t to_write;
-	    
-	    GlobalInterruptDisable();
-	    
-            if(tx.fifo.out > tx.fifo.in) {
-              // write everything until end
-              to_write = tx.fifo.size - tx.fifo.out;
-              
-              bytes_processed = 0;
-              if(Endpoint_Write_Stream_LE(&tx.fifo.buffer[tx.fifo.out], to_write, &bytes_processed) == ENDPOINT_RWSTREAM_IncompleteTransfer) {
-                tx.fifo.out += bytes_processed;
-              } else {
-                tx.fifo.out += to_write;
-              }
-
-              if(tx.fifo.out >= tx.fifo.size) {
-                tx.fifo.out = 0;
-              }
-            }
-
-            if(tx.fifo.out < tx.fifo.in) {
-              to_write = tx.fifo.in - tx.fifo.out;
-              bytes_processed = 0;
-
-              if(Endpoint_Write_Stream_LE(&tx.fifo.buffer[tx.fifo.out], to_write, &bytes_processed) == ENDPOINT_RWSTREAM_IncompleteTransfer) {
-                tx.fifo.out += bytes_processed;
-              } else {
-                tx.fifo.out += to_write;
-              }
-              
-              if(tx.fifo.out >= tx.fifo.size) {
-                tx.fifo.out = 0;
-              }
-            }
-            GlobalInterruptEnable();
-
-            /* Remember if the packet to send completely fills the endpoint */
-            bool IsFull = (Endpoint_BytesInEndpoint() == CDC_TXRX_EPSIZE);
-
-            /* Finalize the stream transfer to send the last packet */
-            Endpoint_ClearIN();
-
-            /* If the last packet filled the endpoint, send an empty packet to release the buffer on
-             * the receiver (otherwise all data will be cached until a non-full packet is received) */
-            if (IsFull)
-            {
-                    /* Wait until the endpoint is ready for another packet */
-                    Endpoint_WaitUntilReady();
-
-                    /* Send an empty packet to ensure that the host does not buffer data sent to it */
-                    Endpoint_ClearIN();
-            }
-	}
-
 	/* Select the Serial Rx Endpoint */
 	Endpoint_SelectEndpoint(CDC_RX_EPADDR);
 
@@ -242,10 +163,39 @@ void VCP_Task(void)
         }
 }
 
+static uint16_t usb_write_sync(const void *buf, uint16_t len)
+{
+  if (USB_DeviceState != DEVICE_STATE_Configured)
+    return 0;
+  
+  Endpoint_SelectEndpoint(CDC_TX_EPADDR);
+  
+  uint16_t bytes_processed = 0;
+  uint8_t e;
+  bool needZLP = false;
+
+  do {
+    Endpoint_WaitUntilReady();
+
+    e = Endpoint_Write_Stream_LE(buf, len, &bytes_processed);
+    
+    needZLP = (Endpoint_BytesInEndpoint() == CDC_TXRX_EPSIZE);
+
+    Endpoint_ClearIN();
+
+  } while(e == ENDPOINT_RWSTREAM_IncompleteTransfer);
+
+  if(needZLP) {
+    Endpoint_WaitUntilReady();
+    Endpoint_ClearIN();
+  }
+  
+  return bytes_processed;
+}
 
 int VCP_Write(uint8_t *buf, int len)
 {
-  return fifo_write(&tx.fifo, buf, len);
+  return usb_write_sync(buf, len);
 }
 
 int VCP_Read(uint8_t *buf, int len)
@@ -255,7 +205,7 @@ int VCP_Read(uint8_t *buf, int len)
 
 void VCP_Puts(const char *str)
 {
-    fifo_puts(&tx.fifo, str);
+  usb_write_sync(str, strlen(str));
 }
 
 void VCP_Printf(const char *fmt, ...)
@@ -269,7 +219,7 @@ void VCP_Printf(const char *fmt, ...)
   
   tmp[sizeof(tmp) - 1] = 0;
   
-  fifo_puts(&tx.fifo, tmp);
+  usb_write_sync(tmp, strlen(tmp));
 
   va_end(ap);
 }
@@ -285,7 +235,7 @@ void VCP_Printf_P(const char *fmt, ...)
   
   tmp[sizeof(tmp) - 1] = 0;
   
-  fifo_puts(&tx.fifo, tmp);
+  usb_write_sync(tmp, strlen(tmp));
 
   va_end(ap);
 }

@@ -4,30 +4,27 @@
 #include "HidSensorSpec.h"
 #include "vcp.h"
 
-#define REPORT_QUEUE_SIZE 3
+#define REPORT_QUEUE_SIZE 8
 
 struct ReportItem {
   uint8_t id;
   uint8_t size;
-  union {
-    HID_RfRx_Report_02_t r02;
-    HID_WOB_Report_03_t r03;
-  } data;
+  HID_Report_Storage_t data;
 };
 
 static struct ReportItem queued[ REPORT_QUEUE_SIZE ];
 
-void HID_Report(uint8_t id, const void *data, uint8_t size)
+bool HID_Report(uint8_t id, const void *data, uint8_t size)
 {
   for(uint8_t i = 0; i < REPORT_QUEUE_SIZE; ++i) {
     if(queued[i].size == 0) {
       memcpy(&queued[i].data, data, size);
       queued[i].id = id;
       queued[i].size = size;
-      break;
+      return true;
     }
   }
-// queue overflow.
+  return false;
 }
 
 /** LUFA HID Class driver interface configuration and state information. This structure is
