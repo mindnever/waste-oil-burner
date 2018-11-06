@@ -96,7 +96,7 @@ flash: firmware.hex
 	$(DFU_PROGRAMMER) $(DEVICE) flash firmware.hex
 
 launch:
-	$(DFU_PROGRAMMER) $(DEVICE) start || true
+	$(DFU_PROGRAMMER) $(DEVICE) reset || true
 
 disasm:	firmware.bin
 	avr-objdump -d firmware.bin
