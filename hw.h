@@ -89,6 +89,15 @@
 #define RELAY_SPARK_PORT B
 #define RELAY_SPARK_PIN  4
 
+// K5, PE6, PROMICRO D7
+#define RELAY_ZONE_EXT1_PORT E
+#define RELAY_ZONE_EXT1_PIN 6
+
+// K6, PB6, PROMICRO D10
+#define RELAY_ZONE_EXT2_PORT B
+#define RELAY_ZONE_EXT2_PIN 6
+
+
 #endif
 
 #define RELAY_ON(n) IO_PIN_LOW(n)

@@ -18,7 +18,7 @@ DEFINES += -DF_CPU=$(F_CPU)
 
 BOARD = PROMICRO
 
-OBJECTS = main.o usb_descriptors.o hid.o vcp.o usb.o twi.o lcd.o rx.o led.o microrl/src/microrl.o
+OBJECTS = main.o usb_descriptors.o hid.o vcp.o usb.o twi.o lcd.o rx.o led.o zones.o flame.o microrl/src/microrl.o
 
 DFU_PROGRAMMER=sudo dfu-programmer
 
@@ -96,7 +96,7 @@ flash: firmware.hex
 	$(DFU_PROGRAMMER) $(DEVICE) flash firmware.hex
 
 launch:
-	$(DFU_PROGRAMMER) $(DEVICE) reset || true
+	$(DFU_PROGRAMMER) $(DEVICE) reset
 
 disasm:	firmware.bin
 	avr-objdump -d firmware.bin
