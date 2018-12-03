@@ -20,7 +20,21 @@
 #define TWI_SCL_PIN PD0
 #define TWI_SDA_PIN PD1
 
-#else
+#elif (BOARD == BOARD_PROMINI)
+
+#define TWI_PRE    1        // my TWI prescaler value 
+
+#define TWI_PRE_1   ( 0 )
+#define TWI_PRE_4   ( _BV( TWPS0 ) )
+#define TWI_PRE_16   ( _BV( TWPS1 ) )
+#define TWI_PRE_64   ( _BV( TWPS1 ) | _BV( TWPS0 ) )
+
+#define TWI_FREQ    100000   // my TWI bit rate
+
+#define TWI_PORT PORTC
+#define TWI_SCL_PIN PC5
+#define TWI_SDA_PIN PC4
+
 
 #endif
 

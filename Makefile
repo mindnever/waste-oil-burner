@@ -9,24 +9,45 @@
 
 # DEFINES += -DBWCT_COMPAT 
 # DEFINES += -DDEBUG_LEVEL=1
+
+BOARD ?= PROMICRO
+
+TICK_MS = 10
+OBJECTS = main.o twi.o lcd.o rx.o led.o zones.o flame.o adc.o microrl/src/microrl.o
+
+ifeq ($(BOARD),PROMICRO)
+
 DEVICE=atmega32u4
 FLASH=28672
 RAM=2500
 F_CPU = 16000000
-TICK_MS = 10
-DEFINES += -DF_CPU=$(F_CPU)
 
-BOARD = PROMICRO
-
-OBJECTS = main.o usb_descriptors.o hid.o vcp.o usb.o twi.o lcd.o rx.o led.o zones.o flame.o microrl/src/microrl.o
-
+OBJECTS += usb_descriptors.o hid.o vcp.o usb.o
 DFU_PROGRAMMER=sudo dfu-programmer
 
 LUFA_PATH = ../lufa-build
 
-LUFA_CFLAGS = -I$(LUFA_PATH) -DARCH=ARCH_AVR8 -DBOARD=BOARD_$(BOARD) -DF_USB=$(F_CPU)UL -DUSE_LUFA_CONFIG_HEADER -I$(LUFA_PATH)/Config/ -DTICK_MS=$(TICK_MS)
+LUFA_CFLAGS = -I$(LUFA_PATH) -DARCH=ARCH_AVR8 -DF_USB=$(F_CPU)UL -DUSE_LUFA_CONFIG_HEADER -I$(LUFA_PATH)/Config/
 LUFA_LIBS = $(LUFA_PATH)/obj/*.o
 
+DEFINES += -DUSE_USB_VCP -DUSE_USB_HID
+
+else
+ifeq ($(BOARD),PROMINI)
+
+DEVICE=atmega328p
+FLASH=28672
+RAM=2048
+F_CPU = 8000000
+AVRDUDE = avrdude -v -c arduino -p $(DEVICE) -P/dev/ttyAMA0 -b57600
+
+OBJECTS += usb_stubs.o
+
+endif
+endif
+
+
+DEFINES += -DF_CPU=$(F_CPU) -DBOARD=BOARD_$(BOARD) -DBOARD_PROMICRO=100 -DBOARD_PROMINI=101 -DTICK_MS=$(TICK_MS)
 
 COMPILE = avr-gcc -Wall -O2 -std=gnu99 -I. -mmcu=$(DEVICE) $(DEFINES) $(LUFA_CFLAGS) -ffunction-sections -fdata-sections -funsigned-char -funsigned-bitfields -fpack-struct -fshort-enums -ffreestanding
 LINK = avr-gcc $(LUFA_LIBS)  -Wl,--gc-sections -Wl,--relax -mmcu=$(DEVICE) -Wl,-u,vfprintf -lprintf_flt -lm
@@ -68,7 +89,7 @@ fuse:
 
 
 clean:
-	rm -f firmware.lst firmware.obj firmware.cof firmware.list firmware.map firmware.eep.hex firmware.bin $(OBJECTS) usbdrv/*.o firmware.s usbdrv/oddebug.s usbdrv/usbdrv.s
+	rm -f firmware.lst firmware.obj firmware.cof firmware.list firmware.map firmware.eep.hex firmware.bin $(OBJECTS) firmware.s
 
 # file targets:
 firmware.bin:	$(OBJECTS)
@@ -86,7 +107,7 @@ size:
 # on Windows with WinAVR where the Unix commands will fail.
 
 avrdude: firmware.hex
-	avrdude -c usbasp -p atmega8 -U lfuse:w:0x9f:m -U hfuse:w:0xc9:m -U flash:w:firmware.hex
+	$(AVRDUDE) avrdude -c arduino -p $(DEVICE) -U flash:w:firmware.hex
 
 avrdude-nodep:
 	avrdude -c usbasp -p atmega8 -U lfuse:w:0x9f:m -U hfuse:w:0xc9:m -U flash:w:firmware.hex

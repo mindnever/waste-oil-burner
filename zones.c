@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "zones.h"
 #include "hid.h"
@@ -29,8 +30,8 @@ void Zones_SetCurrent(sensor_type_t type, uint16_t id, int16_t current)
         ThermalZone *zone = Zones_GetZone(i);
         if(!zone) { continue; }// how can this be? cannot..
         
-        if((zone->_sensor_type == type)
-        && ((type != SENSOR_RFRX) || (id == zone->_config.rfrx.sensor_id))) {
+        if((zone->Config.SensorType == type)
+        && ((type != SENSOR_RFRX) || (id == zone->Config.SensorID))) {
             zone->Current = current;
         }
     }
@@ -45,9 +46,9 @@ void Zones_Update()
             zone->Flags &= ~WOB_REPORT_FLAGS_OUTPUT_ACTIVE;
             continue;
         }
-        if(zone->Current < (zone->SetPoint - zone->_hysteresis)) {
+        if(zone->Current < (zone->Config.SetPoint - zone->Config.Hysteresis)) {
             zone->Flags |= WOB_REPORT_FLAGS_OUTPUT_ACTIVE;
-        } else if(zone->Current > zone->SetPoint) {
+        } else if(zone->Current > zone->Config.SetPoint) {
             zone->Flags &= ~WOB_REPORT_FLAGS_OUTPUT_ACTIVE;
         }
     }
@@ -60,11 +61,11 @@ void Zones_DumpZone(enum ZoneID id, ThermalZone *zone)
                                         zone_names[id],
                                         (zone->Flags & WOB_REPORT_FLAGS_CONTROL_ENABLED) ? "ENABLED" : "DISABLED",
                                         (zone->Flags & WOB_REPORT_FLAGS_OUTPUT_ACTIVE) ? "ACTIVE" : "INACTIVE",
-                                        (float)zone->SetPoint / 10,
+                                        (float)zone->Config.SetPoint / 10,
                                         (float)zone->Current / 10,
-                                        (float)zone->_hysteresis / 10);
+                                        (float)zone->Config.Hysteresis / 10);
 
-    switch(zone->_sensor_type) {
+    switch(zone->Config.SensorType) {
         case SENSOR_NONE:
             VCP_Printf_P(PSTR("none"));
             break;
@@ -78,7 +79,7 @@ void Zones_DumpZone(enum ZoneID id, ThermalZone *zone)
             VCP_Printf_P(PSTR("binary (BUTTON_B)"));
             break;
         case SENSOR_RFRX:
-            VCP_Printf_P(PSTR("RFRX sensor_id=%u"), zone->_config.rfrx.sensor_id);
+            VCP_Printf_P(PSTR("RFRX sensor_id=%u"), zone->Config.SensorID);
             break;
         default:
             VCP_Printf_P(PSTR("unknown"));
@@ -103,20 +104,20 @@ void Zones_ZoneCLI(ThermalZone *zone, int argc, const char * const *argv)
         zone->Flags &= ~WOB_REPORT_FLAGS_CONTROL_ENABLED;
     } else if(!strcasecmp(argv[0], "setpoint")) {
         if(argc > 1) {
-            zone->SetPoint = atof(argv[1]) * 10;
+            zone->Config.SetPoint = atof(argv[1]) * 10;
         }
     } else if(!strcasecmp(argv[0], "sensor")) {
         if(argc > 1) {
             if(!strcasecmp(argv[1], "analog1")) {
-                zone->_sensor_type = SENSOR_ANALOG1;
+                zone->Config.SensorType = SENSOR_ANALOG1;
             } else if(!strcasecmp(argv[1], "analog2")) {
-                zone->_sensor_type = SENSOR_ANALOG2;
+                zone->Config.SensorType = SENSOR_ANALOG2;
             } else if(!strcasecmp(argv[1], "binary")) {
-                zone->_sensor_type = SENSOR_BINARY;
+                zone->Config.SensorType = SENSOR_BINARY;
             } else if(!strcasecmp(argv[1], "rfrx")) {
                 if(argc > 2) {
-                    zone->_sensor_type = SENSOR_RFRX;
-                    zone->_config.rfrx.sensor_id = atoi(argv[2]);
+                    zone->Config.SensorType = SENSOR_RFRX;
+                    zone->Config.SensorID = atoi(argv[2]);
                 }
             } else {
                 VCP_Printf_P(PSTR("unknown zone sensor type '%s'\r\n"), argv[1]);
@@ -124,7 +125,7 @@ void Zones_ZoneCLI(ThermalZone *zone, int argc, const char * const *argv)
         }
     } else if(!strcasecmp(argv[0], "hysteresis")) {
         if(argc > 1) {
-            zone->_hysteresis = atof(argv[1]) * 10;
+            zone->Config.Hysteresis = atof(argv[1]) * 10;
         }
     } else {
         VCP_Printf_P(PSTR("unknown zone command '%s'\r\n"), argv[0]);
@@ -143,7 +144,7 @@ uint8_t Zones_IsCold(enum ZoneID id)
     ThermalZone *zone = Zones_GetZone(id);
     if(!zone) { return false; }
 
-    return zone->Current < (zone->SetPoint - zone->_hysteresis);
+    return zone->Current < (zone->Config.SetPoint - zone->Config.Hysteresis);
 }
 
 uint8_t Zones_IsHot(enum ZoneID id)
@@ -151,5 +152,5 @@ uint8_t Zones_IsHot(enum ZoneID id)
     ThermalZone *zone = Zones_GetZone(id);
     if(!zone) { return false; }
 
-    return zone->Current > zone->SetPoint;
+    return zone->Current > zone->Config.SetPoint;
 }

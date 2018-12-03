@@ -1,6 +1,8 @@
 #include <avr/io.h>
 #include <avr/interrupt.h>
 #include <stdlib.h>
+#include <string.h>
+
 #include "rx.h"
 #include "hw.h"
 #include "usb.h"
@@ -89,7 +91,14 @@ ISR (TIMER1_CAPT_vect)
   // enable irq
   TIMSK1 |= _BV(OCIE1A);
 
+#if (BOARD == BOARD_PROMICRO)
   uint16_t len = (capture - prev) / 2;
+#elif (BOARD == BOARD_PROMINI)
+  uint16_t len = (capture - prev);
+#endif
+
+
+
   
   if(TCCR1B & TIMER1_CAPTURE_RISING_EDGE) {
     // look for sync.

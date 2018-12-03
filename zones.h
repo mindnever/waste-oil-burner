@@ -10,6 +10,16 @@ typedef enum {
 } sensor_type_t;
 
 typedef struct {
+    int16_t  SetPoint;
+    uint16_t Hysteresis;
+
+    uint8_t  SensorType;
+    uint16_t SensorID; /* for RFRX */
+
+} ThermalZoneConfiguration;
+
+/*
+typedef struct {
     int16_t SetPoint;
     int16_t Current;
     uint8_t Flags; // use hid.h: HID_WOB_Report_04_t Flags values ( WOB_REPORT_FLAGS_CONTROL_ENABLED, WOB_REPORT_FLAGS_OUTPUT_ACTIVE)
@@ -23,6 +33,16 @@ typedef struct {
     } _config;
     
     uint16_t _hysteresis;
+} ThermalZone;
+*/
+
+typedef struct {
+
+    int16_t Current;
+    uint8_t Flags;
+
+    ThermalZoneConfiguration Config;
+
 } ThermalZone;
 
 enum ZoneID {

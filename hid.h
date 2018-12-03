@@ -4,7 +4,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#ifdef __AVR
+#ifdef USE_USB_HID
 # include <LUFA/Common/Common.h>
 #endif
 
@@ -63,9 +63,9 @@ typedef union {
     HID_WOB_Report_04_t r04;
 } HID_Report_Storage_t;
 
-#ifdef __AVR
-
 bool HID_Report(uint8_t reportId, const void *reportData, uint8_t reportSize);
+
+#ifdef USE_USB_HID
 
 bool HID_EVENT_USB_Device_ConfigurationChanged(void);
 void HID_EVENT_USB_Device_ControlRequest(void);

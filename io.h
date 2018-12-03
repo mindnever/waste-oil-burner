@@ -1,6 +1,8 @@
 #ifndef _RF_SENSORS_COMMON_IO_H_
 #define _RF_SENSORS_COMMON_IO_H_
 
+#include <avr/io.h>
+
 #define _CONCAT(a,b) a ## b
 #define _CONCAT3(a,b,c) a ## b ## c
 

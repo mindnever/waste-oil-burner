@@ -51,16 +51,18 @@ void handle_led(void)
         slow = !slow;
         tick_s = 0;
     }
-    
+#ifdef LED_A_PORT    
     if(led_state( (pulse_a > 0) ? blink_on : led_a, slow, fast)) {
         LED_ON( LED_A );
     } else {
         LED_OFF( LED_A );
     }
-    
+#endif
+#ifdef LED_B_PORT    
     if(led_state( (pulse_b > 0) ? blink_on : led_b, slow, fast)) {
         LED_ON( LED_B );
     } else {
         LED_OFF( LED_B );
     }
+#endif
 }

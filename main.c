@@ -1,27 +1,41 @@
 #include <util/delay.h>
 #include <avr/wdt.h>
+#include <avr/pgmspace.h>
+#include <avr/interrupt.h>
+
+#include <string.h>
 
 #include "boot.h"
 
 #include "hw.h"
 
-#include "usb_descriptors.h"
+#if defined(USE_USB_VCP) || defined(USE_USB_HID)
+# include "usb_descriptors.h"
+//# include <LUFA/Drivers/Board/LEDs.h>
+# include <LUFA/Drivers/USB/USB.h>
+# include <LUFA/Platform/Platform.h>
+# include "usb.h"
+#endif
+
 #include "vcp.h"
-#include "usb.h"
+#include "hid.h"
+
 #include "twi.h"
 #include "lcd.h"
 #include "led.h"
 #include "rx.h"
 #include "zones.h"
 #include "flame.h"
+#include "adc.h"
 
-#include <LUFA/Drivers/Board/LEDs.h>
-#include <LUFA/Drivers/USB/USB.h>
-#include <LUFA/Platform/Platform.h>
 
 #include "microrl/src/microrl.h"
 
 #include <stdlib.h>
+
+#ifndef cpu_to_le16
+# define cpu_to_le16(x)           (x)
+#endif
 
 #define SYM_DEG "\xdf"
 
@@ -207,52 +221,16 @@ static void CLI_Task()
     }
 }
 
-static void adc_mux(uint8_t mux)
-{
-    ADMUX = _BV( REFS0 ) | _BV( ADLAR ) | mux;
-}
-
-static void init_sensors()
-{
-#ifdef SENSOR_A_PORT
-    IO_DIR_IN( SENSOR_A );
-    IO_PIN_HIGH( SENSOR_A ); // pullup
-#endif
-    
-#ifdef SENSOR_B_PORT
-    IO_DIR_IN( SENSOR_B );
-    IO_PIN_HIGH( SENSOR_B ); // pullup
-#endif
-    
-#ifdef SENSOR_C_PORT
-    IO_DIR_IN( SENSOR_C );
-    IO_PIN_HIGH( SENSOR_C ); // pullup
-#endif
-    
-    // setup ADC, ADMUX input to ADC6, Vref = AVcc, start , 125khz clock
-    // free running mode
-    adc_mux( IO_ADCMUX( SENSOR_A ) );
-    
-    ADCSRA = _BV( ADEN ) | _BV( ADSC ) | _BV( ADPS0 ) | _BV( ADPS1 ) | _BV( ADPS2 ) | _BV( ADATE );
-    
-    DIDR0 =
-#ifdef SENSOR_A_PORT
-    _BV( IO_DIDR0( SENSOR_A ) ) |
-#endif
-#ifdef SENSOR_B_PORT
-    _BV( IO_DIDR0( SENSOR_B ) ) |
-#endif
-#ifdef SENSOR_C_PORT
-    _BV( IO_DIDR0( SENSOR_C ) ) |
-#endif
-    0;
-}
 
 static void IO_Init()
 {
+#ifdef LED_A_PORT
     IO_DIR_OUT( LED_A );
+#endif
+#ifdef LED_B_PORT
     IO_DIR_OUT( LED_B );
-    
+#endif
+
     IO_DIR_OUT( RELAY_HEATER );
     IO_DIR_OUT( RELAY_FAN );
     IO_DIR_OUT( RELAY_AIR );
@@ -273,27 +251,27 @@ static void Init_ThermalZones(void)
     ThermalZone *zone;
     
     if( ( zone = Zones_GetZone( ZONE_ID_WATER ) ) ) {
-        zone->SetPoint = DEFAULT_TARGET_WATER_TEMPERATURE * 10;
+        zone->Config.SetPoint = DEFAULT_TARGET_WATER_TEMPERATURE * 10;
         zone->Current = 0;
         zone->Flags = 0;
-        zone->_sensor_type = SENSOR_ANALOG2;
-        zone->_hysteresis = DEFAULT_WATER_TEMP_HYST * 10;
+        zone->Config.SensorType = SENSOR_ANALOG2;
+        zone->Config.Hysteresis = DEFAULT_WATER_TEMP_HYST * 10;
     }
     
     if( ( zone = Zones_GetZone( ZONE_ID_OIL) ) ) {
-        zone->SetPoint = DEFAULT_TARGET_OIL_TEMPERATURE * 10;
+        zone->Config.SetPoint = DEFAULT_TARGET_OIL_TEMPERATURE * 10;
         zone->Current = 0;
         zone->Flags = 0;
-        zone->_sensor_type = SENSOR_ANALOG1;
-        zone->_hysteresis = DEFAULT_OIL_TEMP_HYST * 10;
+        zone->Config.SensorType = SENSOR_ANALOG1;
+        zone->Config.Hysteresis = DEFAULT_OIL_TEMP_HYST * 10;
     }
     
     if( ( zone = Zones_GetZone( ZONE_ID_EXT1 ) ) ) {
-        zone->SetPoint = 22 * 10;
+        zone->Config.SetPoint = 22 * 10;
         zone->Current = 0;
         zone->Flags = WOB_REPORT_FLAGS_CONTROL_ENABLED;
-        zone->_sensor_type = SENSOR_BINARY;
-        zone->_hysteresis = 0.0;
+        zone->Config.SensorType = SENSOR_BINARY;
+        zone->Config.Hysteresis = 0.0;
     }
     
     Zones_Init();
@@ -369,12 +347,16 @@ int main(void)
 {
     wdt_enable(WDTO_1S);
     
+#if defined(USE_USB_VCP) || defined(USE_USB_HID)
     USB_Init();
-    
+#endif
+
+    VCP_Init();
+
     IO_Init();
     
     Init_ThermalZones();
-
+    
     microrl_init(&mrl, VCP_Puts);
     microrl_set_execute_callback(&mrl, CLI_Execute);
     microrl_set_complete_callback(&mrl, CLI_GetCompletion);
@@ -384,10 +366,14 @@ int main(void)
     RELAY_OFF( RELAY_AIR );
     RELAY_OFF( RELAY_SPARK );
     
+#ifdef LED_A_PORT
     LED_ON( LED_A );
+#endif
+#ifdef LED_B_PORT
     LED_ON( LED_B );
+#endif
     
-    init_sensors();
+    ADC_Init();
     
     twi_init();
     lcd_init();
@@ -398,11 +384,7 @@ int main(void)
     uint32_t status = 0;
     uint32_t lcd_reinit = 0;
     
-    
-    
-    int sensor = 0;
-    
-    GlobalInterruptEnable();
+    sei();
     
     VCP_Printf_P(PSTR("Booting\r\n"));
     
@@ -410,7 +392,10 @@ int main(void)
     {
         wdt_reset();
         
+#if defined(USE_USB_VCP) || defined(USE_USB_HID)
         USB_Task();        
+#endif
+
         CLI_Task();
 
         RfRx_Task( on_rfrx_sensor_data );
@@ -424,34 +409,10 @@ int main(void)
             force_hid_reports_counter = 0;
         }
         
-        switch(sensor) {
-            default:
-                sensor = 0;
-            case 0:
-                adc_mux( IO_ADCMUX( SENSOR_A ) );
-                break;
-            case 1:
-                adc_mux( IO_ADCMUX( SENSOR_B ) );
-                break;
-            case 2:
-                adc_mux( IO_ADCMUX( SENSOR_C ) );
-        }
+        ADC_Task();
         
         _delay_ms(TICK_MS);
-
-        switch(sensor) {
-            case 0:
-                FlameData.sensor = ADC; // flame
-                break;
-            case 1:
-                Zones_SetCurrent(SENSOR_ANALOG1, 0, (analog_cfg[0].gain * ADC + analog_cfg[0].offset) * 10);
-                break;
-            case 2:
-                Zones_SetCurrent(SENSOR_ANALOG2, 0, (analog_cfg[1].gain * ADC + analog_cfg[1].offset) * 10);
-                break;
-        }
         
-        ++sensor;
         
         ++status;
         if(status > DELAY_STATUS) {
@@ -584,7 +545,7 @@ void do_hid_report_04()
         }
         
         report.Zone = i;
-        report.SetPoint = cpu_to_le16( zone->SetPoint );
+        report.SetPoint = cpu_to_le16( zone->Config.SetPoint );
         report.Current = cpu_to_le16( zone->Current );
         report.Flags = zone->Flags;
         
@@ -625,6 +586,8 @@ void on_rfrx_sensor_data(struct RfRx_SensorData *data)
     Zones_SetCurrent(SENSOR_RFRX, report.SensorGUID, report.Temperature);
 }
 
+#ifdef USE_USB_VCP
+
 void EVENT_VCP_SetLineEncoding(CDC_LineEncoding_t *LineEncoding)
 {
 }
@@ -647,3 +610,4 @@ void EVENT_VCP_SetControlLineState(uint16_t State)
 }
 
 
+#endif /* USE_USB_VCP */

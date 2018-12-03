@@ -62,6 +62,9 @@ static int fifo_read(vcp_fifo_t *fifo, uint8_t *buf, int len)
   return i;
 }
 
+void VCP_Init(void)
+{
+}
 
 /** Event handler for the USB_ConfigurationChanged event. This is fired when the host set the current configuration
  *  of the USB device after enumeration - the device endpoints are configured and the CDC management task started.
@@ -153,9 +156,9 @@ void VCP_Task(void)
 
 	  Endpoint_Read_Stream_LE(&Buffer, DataLength, NULL);
 
-	  GlobalInterruptDisable();
+	  cli();
           fifo_write(&rx.fifo, Buffer, DataLength);
-          GlobalInterruptEnable();
+          sei();
 
 	  Endpoint_ClearOUT();
 	  
