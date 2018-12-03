@@ -72,6 +72,8 @@ static const char *state_name[] = {
     "Fault",
 };
 
+static uint32_t uptime;
+
 static void on_rfrx_sensor_data(struct RfRx_SensorData *data);
 
 static uint16_t force_hid_reports_counter;
@@ -121,6 +123,8 @@ static int CLI_Execute(int argc, const char * const *argv)
     if(!strcasecmp(argv[0], "monitor")) {
         monitor_mode = 1;
         VCP_Printf_P(PSTR("Monitor mode on\r\n"));
+    } else if(!strcasecmp(argv[0], "uptime")) {
+        VCP_Printf_P(PSTR("%lu\r\n"), uptime);
     } else if(!strcasecmp(argv[0], "info")) {
         CLI_Info();
     } else if(!strcasecmp(argv[0], "dfu")) {
@@ -394,6 +398,8 @@ int main(void)
     
     for(;;)
     {
+        ++uptime;
+        
         wdt_reset();
         
 #if defined(USE_USB_VCP) || defined(USE_USB_HID)
