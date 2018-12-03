@@ -21,6 +21,7 @@ typedef struct
 #define WOB_REPORT_INPUT_BUTTON_A (1 << 0)
 #define WOB_REPORT_INPUT_BUTTON_B (1 << 1)
 #define WOB_REPORT_INPUT_BURNING  (1 << 2)
+#define WOB_REPORT_INPUT_BUTTON_R (1 << 3)
 
 #define WOB_REPORT_OUTPUT_HEATER (1 << 0)
 #define WOB_REPORT_OUTPUT_FAN	 (1 << 1)

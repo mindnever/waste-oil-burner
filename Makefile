@@ -13,7 +13,7 @@
 BOARD ?= PROMICRO
 
 TICK_MS = 10
-OBJECTS = main.o twi.o lcd.o rx.o led.o zones.o flame.o adc.o microrl/src/microrl.o
+OBJECTS = main.o twi.o lcd.o rx.o led.o zones.o flame.o adc.o eeconfig.o microrl/src/microrl.o
 
 ifeq ($(BOARD),PROMICRO)
 

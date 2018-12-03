@@ -6,8 +6,23 @@
 #include "flame.h"
 #include "hw.h"
 
+// analog sensor
+#define DEFAULT_ANALOG_SENSOR_GAIN -0.001958311
+#define DEFAULT_ANALOG_SENSOR_OFFSET 129.5639
 
-AnalogSensorConfiguration ADC_Config;
+
+AnalogSensorConfiguration ADC_Config = {
+    .Calibration = {
+        [ 0 ] = {
+            .gain = DEFAULT_ANALOG_SENSOR_GAIN,
+            .offset = DEFAULT_ANALOG_SENSOR_OFFSET,
+        },
+        [ 1 ] = {
+            .gain = DEFAULT_ANALOG_SENSOR_GAIN,
+            .offset = DEFAULT_ANALOG_SENSOR_OFFSET,
+        },
+    }
+};
 
 static void ADC_Mux(uint8_t mux)
 {
@@ -52,21 +67,27 @@ void ADC_Init(void)
 
 }
 
+uint16_t raw_adc[3];
+
 void ADC_Task(void)
 {
     static int sensor = 0;
+    
+    uint16_t value = ADC;
+    
+    raw_adc[sensor] = value;
 
     switch(sensor) {
         case 0:
-            FlameData.sensor = ADC; // flame
+            FlameData.sensor = value; // flame
             ADC_Mux( IO_ADCMUX( SENSOR_B ) ); // next
             break;
         case 1:
-            Zones_SetCurrent(SENSOR_ANALOG1, 0, (ADC_Config.Calibration[0].gain * ADC + ADC_Config.Calibration[0].offset) * 10);
+            Zones_SetCurrent(SENSOR_ANALOG1, 0, (ADC_Config.Calibration[0].gain * value + ADC_Config.Calibration[0].offset) * 10);
             ADC_Mux( IO_ADCMUX( SENSOR_C ) ); // next
             break;
         case 2:
-            Zones_SetCurrent(SENSOR_ANALOG2, 0, (ADC_Config.Calibration[1].gain * ADC + ADC_Config.Calibration[1].offset) * 10);
+            Zones_SetCurrent(SENSOR_ANALOG2, 0, (ADC_Config.Calibration[1].gain * value + ADC_Config.Calibration[1].offset) * 10);
             ADC_Mux( IO_ADCMUX( SENSOR_A ) ); // next
             break;
     }

@@ -38,6 +38,15 @@
 #define BUTTON_B_PORT B
 #define BUTTON_B_PIN 2
 
+// rotary encoder button
+#define BUTTON_R_PORT D
+#define BUTTON_R_PIN 2
+
+// rotary encoder A & B
+#define ENCODER_A_PORT B
+#define ENCODER_A_PIN 1
+#define ENCODER_B_PORT B
+#define ENCODER_B_PIN 3
 
 #define LED_A_PORT B
 #define LED_A_PIN 0

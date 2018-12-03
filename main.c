@@ -27,7 +27,7 @@
 #include "zones.h"
 #include "flame.h"
 #include "adc.h"
-
+#include "eeconfig.h"
 
 #include "microrl/src/microrl.h"
 
@@ -40,9 +40,6 @@
 #define SYM_DEG "\xdf"
 
 
-// analog sensor
-#define DEFAULT_ANALOG_SENSOR_GAIN -0.001958311
-#define DEFAULT_ANALOG_SENSOR_OFFSET 129.5639
 
 //////
 
@@ -92,23 +89,9 @@ static int button_a;
 #ifdef BUTTON_B_PORT
 static int button_b;
 #endif
-    
-
-static struct analog_sensor_calibration {
-    float gain;
-    float offset;
-} analog_cfg[2] = {
-    [ 0 ] = {
-        .gain = DEFAULT_ANALOG_SENSOR_GAIN,
-        .offset = DEFAULT_ANALOG_SENSOR_OFFSET,
-    },
-    [ 1 ] = {
-        .gain = DEFAULT_ANALOG_SENSOR_GAIN,
-        .offset = DEFAULT_ANALOG_SENSOR_OFFSET,
-    },
-};
-
-
+#ifdef BUTTON_R_PORT
+static int button_r;
+#endif    
 
 static void CLI_Dfu()
 {
@@ -146,8 +129,8 @@ static int CLI_Execute(int argc, const char * const *argv)
         if(argc > 1) {
             if(!strcasecmp(argv[1], "print")) {
                 // print analog calibration
-                VCP_Printf_P(PSTR("analog 1 gain %f offset %f\r\n"), analog_cfg[0].gain, analog_cfg[0].offset);
-                VCP_Printf_P(PSTR("analog 2 gain %f offset %f\r\n"), analog_cfg[1].gain, analog_cfg[1].offset);
+                VCP_Printf_P(PSTR("analog 1 gain %f offset %f\r\n"), ADC_Config.Calibration[0].gain, ADC_Config.Calibration[0].offset);
+                VCP_Printf_P(PSTR("analog 2 gain %f offset %f\r\n"), ADC_Config.Calibration[1].gain, ADC_Config.Calibration[1].offset);
             } else {
                 if(argc > 3) {
                     unsigned index = atoi(argv[1]);
@@ -155,12 +138,15 @@ static int CLI_Execute(int argc, const char * const *argv)
                         --index;
                         
                         if(!strcasecmp(argv[2], "gain")) {
-                            analog_cfg[index].gain = atof(argv[3]);
+                            ADC_Config.Calibration[index].gain = atof(argv[3]);
                         } else if(!strcasecmp(argv[2], "offset")) {
-                            analog_cfg[index].offset = atof(argv[3]);
+                            ADC_Config.Calibration[index].offset = atof(argv[3]);
                         } else {
                             VCP_Printf_P(PSTR("Unknown analog sensor parameter '%s'\r\n"), argv[2]);
                         }
+                        
+                        EEConfig_Save();
+                        
                     } else {
                         VCP_Printf_P(PSTR("Sensors 1 & 2 are supported only\r\n"));
                     }
@@ -180,6 +166,8 @@ static int CLI_Execute(int argc, const char * const *argv)
                     if((zone = Zones_GetZone(atoi(argv[1]) - 1))) {
 
                         Zones_ZoneCLI(zone, argc - 2, argv + 2);
+                        
+                        EEConfig_Save();
                         
                     } else {
                         VCP_Printf_P(PSTR("zone %s does not exist\r\n"), argv[1]);
@@ -243,6 +231,10 @@ static void IO_Init()
 #ifdef BUTTON_B_PORT
     IO_DIR_IN( BUTTON_B );
     IO_PIN_HIGH( BUTTON_B ); // pullup
+#endif
+#ifdef BUTTON_R_PORT
+    IO_DIR_IN( BUTTON_R );
+    IO_PIN_HIGH( BUTTON_R ); // pullup
 #endif
 }
 
@@ -340,6 +332,16 @@ static void Button_Task()
     Zones_SetCurrent(SENSOR_BINARY, 0, IS_PRESSED(button_b) ? 100 : 250);
 #endif
 
+#ifdef BUTTON_R_PORT
+    if( !IO_PIN_READ( BUTTON_R ) ) {
+        if(button_r < BUTTON_DEBOUNCE) {
+            ++button_r;
+        }
+    } else {
+        button_r = 0;
+    }
+#endif
+
 }
 
 
@@ -374,6 +376,8 @@ int main(void)
 #endif
     
     ADC_Init();
+    
+    EEConfig_Load();
     
     twi_init();
     lcd_init();
@@ -431,11 +435,11 @@ int main(void)
                       *water = Zones_GetZone(ZONE_ID_WATER);
             
             if(monitor_mode) { // TODO: output JSON for MQTT
-                VCP_Printf_P(PSTR("State:%d [%s], s_A:%u, t_Oil:%.1f, t_Water:%.1f, Flame:%d IgnCount:%d\r\n"), FlameData.state, state_name[FlameData.state], FlameData.sensor, (float)oil->Current / 10, (float)water->Current / 10, (int)FlameData.burning, (int)FlameData.ignition_count);
+                VCP_Printf_P(PSTR("State:%d [%s], s_A:%u, s_B:%u, s_C:%u, t_Oil:%.1f, t_Water:%.1f, Flame:%d IgnCount:%d\r\n"), FlameData.state, state_name[FlameData.state], FlameData.sensor, raw_adc[1], raw_adc[2], (float)oil->Current / 10, (float)water->Current / 10, (int)FlameData.burning, (int)FlameData.ignition_count);
             }
             status = 0;
 
-            char ab[3] = {
+            char ab[] = {
 #ifdef BUTTON_A_PORT
                 IS_PRESSED(button_a) ? 'A' : ' ',
 #else
@@ -443,6 +447,11 @@ int main(void)
 #endif
 #ifdef BUTTON_B_PORT
                 IS_PRESSED(button_b) ? 'B' : ' ',
+#else
+                ' ',
+#endif
+#ifdef BUTTON_R_PORT
+                IS_PRESSED(button_r) ? 'R' : ' ',
 #else
                 ' ',
 #endif
@@ -494,6 +503,9 @@ void do_hid_report_03()
     if(IS_PRESSED(button_b)) {
         report.Inputs |= WOB_REPORT_INPUT_BUTTON_B;
     }
+    if(IS_PRESSED(button_r)) {
+        report.Inputs |= WOB_REPORT_INPUT_BUTTON_R;
+    }
     if(IS_BURNING()) {
         report.Inputs |= WOB_REPORT_INPUT_BURNING;
     }
@@ -521,7 +533,7 @@ void do_hid_report_03()
 
 void send_hid_report_04_if_changed(HID_WOB_Report_04_t *report)
 {
-    static HID_WOB_Report_04_t prev_report[_WOB_REPORT_ZONE_COUNT] = { 0 };
+    static HID_WOB_Report_04_t prev_report[_WOB_REPORT_ZONE_COUNT] = { { 0 } };
 
     if(report->Zone >= _WOB_REPORT_ZONE_COUNT) {
         return;
