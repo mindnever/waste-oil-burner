@@ -298,6 +298,11 @@ static void Init_ThermalZones(void)
         zone->Config.Hysteresis = 0.0;
     }
     
+    if( ( zone = Zones_GetZone( ZONE_ID_EXT2) ) ) {
+        zone->Current = 0;
+        zone->Flags = WOB_REPORT_FLAGS_CONTROL_ENABLED;
+    }
+    
     Zones_Init();
 }
 
@@ -439,8 +444,10 @@ static void UI_Task()
     --lcd_reinit;
 
     if(ui_idle == 0) {
-        ui_mode = UI_MODE_STATUS;
-        ui_refresh = 1;
+        if(ui_mode != UI_MODE_STATUS) {
+            ui_mode = UI_MODE_STATUS;
+            ui_refresh = 1;
+        }
         
         if(setpoint.Value) {
             EEConfig_Save();
