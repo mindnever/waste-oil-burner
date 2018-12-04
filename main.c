@@ -1,4 +1,3 @@
-#include <util/delay.h>
 #include <avr/wdt.h>
 #include <avr/pgmspace.h>
 #include <avr/interrupt.h>
@@ -53,9 +52,10 @@
 
 #define DELAY_STATUS (500/TICK_MS)
 
-#define LCD_REINIT_COUNT 10
+#define LCD_REINIT (30000/TICK_MS)
+#define UI_IDLE_TIMEOUT (5000/TICK_MS)
 
-#define BUTTON_DEBOUNCE (100/TICK_MS)
+#define BUTTON_DEBOUNCE (30/TICK_MS)
 #define FORCE_HID_REPORTS (1000/TICK_MS)
 
 
@@ -72,6 +72,20 @@ static const char *state_name[] = {
     "Fault",
 };
 
+typedef enum {
+    UI_MODE_STATUS = 0,
+    UI_MODE_SET_OIL,
+    UI_MODE_SET_WATER,
+    UI_MODE_SET_EXT1,
+    UI_MODE_SET_EXT2,
+    UI_MODE_SET_EXT3,
+    UI_MODE_SET_EXT4,
+    _UI_MODE_MAX,
+} ui_mode_t;
+
+static ui_mode_t ui_mode = UI_MODE_STATUS;
+static uint8_t ui_refresh = 0;
+
 static uint32_t uptime;
 
 static void on_rfrx_sensor_data(struct RfRx_SensorData *data);
@@ -82,6 +96,7 @@ static uint8_t force_hid_reports;
 static void do_hid_report_03();
 static void do_hid_report_04();
 
+static int8_t encoder_event;
 static uint8_t monitor_mode;
 static microrl_t mrl;
 
@@ -236,9 +251,22 @@ static void IO_Init()
     IO_DIR_IN( BUTTON_B );
     IO_PIN_HIGH( BUTTON_B ); // pullup
 #endif
-#ifdef BUTTON_R_PORT
+
+#ifdef HAVE_ENCODER
     IO_DIR_IN( BUTTON_R );
     IO_PIN_HIGH( BUTTON_R ); // pullup
+
+    IO_DIR_IN( ENCODER_A );
+    IO_PIN_HIGH( ENCODER_A );
+
+    IO_DIR_IN( ENCODER_B );
+    IO_PIN_HIGH( ENCODER_B );
+
+    PCMSK0 = _BV( ENCODER_A_PIN ) | _BV( ENCODER_B_PIN );
+
+    /* enable pin change interupts */
+    PCICR |= ( 1<<PCIE0 );
+
 #endif
 }
 
@@ -308,6 +336,41 @@ static void Update_Outputs()
 #endif
 }
 
+
+#ifdef HAVE_ENCODER
+/* https://www.circuitsathome.com/mcu/rotary-encoder-interrupt-service-routine-for-avr-micros/ */
+/* encoder routine. Expects encoder with four state changes between detents */
+/* and both pins open on detent */
+ISR( PCINT0_vect )
+{
+  static uint8_t old_AB = 3;  //lookup table index
+  static int8_t encval = 0;   //encoder value  
+  static const int8_t enc_states [] PROGMEM = 
+  {0,-1,1,0,1,0,0,-1,-1,0,0,1,0,1,-1,0};  //encoder lookup table
+  /**/
+
+  old_AB <<=2;  //remember previous state
+
+  uint8_t AB = IO_PORT_IN( IO_PORTNAME( ENCODER_A ) );
+  if(AB & _BV( IO_PIN( ENCODER_A ) )) {
+      old_AB |= (1 << 0);
+  }
+  if(AB & _BV( IO_PIN( ENCODER_B ) )) {
+      old_AB |= (1 << 1);
+  }
+  encval += pgm_read_byte(&(enc_states[( old_AB & 0x0f )]));
+  /* post "Navigation forward/reverse" event */
+  if( encval > 3 ) {  //four steps forward
+    encoder_event = -1;
+    encval = 0;
+  }
+  else if( encval < -3 ) {  //four steps backwards
+    encoder_event = 1;
+    encval = 0;
+  }
+}
+#endif
+
 static void Button_Task()
 {
 #ifdef BUTTON_A_PORT
@@ -345,9 +408,175 @@ static void Button_Task()
         button_r = 0;
     }
 #endif
-
 }
 
+typedef struct {
+    int16_t Min;
+    int16_t Max;
+    int16_t Step;
+    int16_t *Value;
+    const char *Name;
+} UI_Setpoint;
+
+static void UI_Task()
+{
+    static uint8_t status = 0;
+    static uint16_t lcd_reinit = 0;
+    static uint16_t ui_idle = 0;
+
+    static UI_Setpoint setpoint = { 
+        .Min = 0,
+        .Max = 1200,
+        .Step = 1,
+        .Name = 0,
+    };
+
+    if(lcd_reinit == 0) {
+        lcd_bus_error = 1; // force LCD bus error
+        lcd_reinit = LCD_REINIT;
+    }
+    
+    --lcd_reinit;
+
+    if(ui_idle == 0) {
+        ui_mode = UI_MODE_STATUS;
+        ui_refresh = 1;
+        
+        if(setpoint.Value) {
+            EEConfig_Save();
+        }
+        
+        setpoint.Name = 0;
+        setpoint.Value = 0;
+    } else {
+        --ui_idle;
+    }
+
+#ifdef HAVE_ENCODER
+    static uint8_t was_pressed = 0;
+
+    if(IS_PRESSED( button_r ) && !was_pressed) {
+        was_pressed = 1;
+        // transition ui
+
+        ++ui_mode;
+        if(ui_mode == _UI_MODE_MAX) {
+            ui_mode = 0;
+        }
+        ui_refresh = 1;
+        ui_idle = UI_IDLE_TIMEOUT;
+
+        switch(ui_mode) {
+            case UI_MODE_STATUS:
+                setpoint.Name = 0;
+                setpoint.Value = 0;
+                break;
+            case UI_MODE_SET_OIL:
+                setpoint.Name = "Oil";
+                setpoint.Value = &(Zones_GetZone(ZONE_ID_OIL)->Config.SetPoint);
+                break;
+            case UI_MODE_SET_WATER:
+                setpoint.Name = "Water"; 
+                setpoint.Value = &(Zones_GetZone(ZONE_ID_WATER)->Config.SetPoint);
+                break;
+            case UI_MODE_SET_EXT1:
+                setpoint.Name = "Ext1";
+                setpoint.Value = &(Zones_GetZone(ZONE_ID_EXT1)->Config.SetPoint);;
+                break;
+            case UI_MODE_SET_EXT2:
+                setpoint.Name = "Ext2";
+                setpoint.Value = &(Zones_GetZone(ZONE_ID_EXT2)->Config.SetPoint);;
+                break;
+            case UI_MODE_SET_EXT3:
+                setpoint.Name = "Ext3";
+                setpoint.Value = &(Zones_GetZone(ZONE_ID_EXT3)->Config.SetPoint);
+                break;
+            case UI_MODE_SET_EXT4:
+                setpoint.Name = "Ext4";
+                setpoint.Value = &(Zones_GetZone(ZONE_ID_EXT4)->Config.SetPoint);;
+                break;
+            default:break;
+        }
+    }
+
+    if(!IS_PRESSED( button_r )) {
+        was_pressed = 0;
+    }
+    
+
+    if(encoder_event) {
+
+        ui_idle = UI_IDLE_TIMEOUT;
+
+        if(setpoint.Value) {
+
+            float nv = *setpoint.Value + (setpoint.Step * encoder_event);
+
+            if(nv >= setpoint.Min && nv <= setpoint.Max) {
+                *setpoint.Value = nv;
+                ui_refresh = 1;
+            }
+        }
+
+        encoder_event = 0;
+    }
+#endif
+
+    ++status;
+    if((status > DELAY_STATUS) || (ui_refresh)) {
+        status = 0;
+        ui_refresh = 0;
+
+        
+        if(lcd_bus_error) {
+            lcd_init();
+        }
+        
+        ThermalZone *oil = Zones_GetZone(ZONE_ID_OIL),
+                  *water = Zones_GetZone(ZONE_ID_WATER);
+        
+        if(monitor_mode) { // TODO: output JSON for MQTT
+            VCP_Printf_P(PSTR("State:%d [%s], s_A:%u, s_B:%u, s_C:%u, t_Oil:%.1f, t_Water:%.1f, Flame:%d IgnCount:%d\r\n"), FlameData.state, state_name[FlameData.state], FlameData.sensor, raw_adc[1], raw_adc[2], (float)oil->Current / 10, (float)water->Current / 10, (int)FlameData.burning, (int)FlameData.ignition_count);
+        }
+
+
+        char ab[] = {
+#ifdef BUTTON_A_PORT
+            IS_PRESSED(button_a) ? 'A' : ' ',
+#else
+            ' ',
+#endif
+#ifdef BUTTON_B_PORT
+            IS_PRESSED(button_b) ? 'B' : ' ',
+#else
+            ' ',
+#endif
+#ifdef BUTTON_R_PORT
+            IS_PRESSED(button_r) ? 'R' : ' ',
+#else
+            ' ',
+#endif
+            0
+        };
+
+        lcd_move(0, 0);
+        lcd_printf_P(PSTR("F:% 2u %s %-6s"), FlameData.sensor/1000, ab, state_name[FlameData.state]);
+        lcd_move(0, 1);
+        
+        switch(ui_mode) {
+            case UI_MODE_STATUS:
+                lcd_printf_P(PSTR("O:%3d" SYM_DEG "C  W:%3d" SYM_DEG "C"), (int)oil->Current / 10, (int)water->Current / 10);
+                break;
+            default:break;
+        }
+
+        if(setpoint.Name) {
+            int16_t v = *setpoint.Value;
+            lcd_printf_P(PSTR("%-8s %3d.%1u" SYM_DEG "C"), setpoint.Name, v / 10, v % 10);
+        }
+
+    }
+}
 
 int main(void)
 {
@@ -389,8 +618,6 @@ int main(void)
     
     Flame_Init();
 
-    uint32_t status = 0;
-    uint32_t lcd_reinit = 0;
     
     sei();
     
@@ -423,52 +650,8 @@ int main(void)
         
         _delay_ms(TICK_MS);
         
+        UI_Task();
         
-        ++status;
-        if(status > DELAY_STATUS) {
-            if(lcd_reinit == 0) {
-                lcd_bus_error = 1; // force LCD bus error
-                lcd_reinit = LCD_REINIT_COUNT;
-            }
-            
-            --lcd_reinit;
-            
-            if(lcd_bus_error) {
-                lcd_init();
-            }
-            
-            ThermalZone *oil = Zones_GetZone(ZONE_ID_OIL),
-                      *water = Zones_GetZone(ZONE_ID_WATER);
-            
-            if(monitor_mode) { // TODO: output JSON for MQTT
-                VCP_Printf_P(PSTR("State:%d [%s], s_A:%u, s_B:%u, s_C:%u, t_Oil:%.1f, t_Water:%.1f, Flame:%d IgnCount:%d\r\n"), FlameData.state, state_name[FlameData.state], FlameData.sensor, raw_adc[1], raw_adc[2], (float)oil->Current / 10, (float)water->Current / 10, (int)FlameData.burning, (int)FlameData.ignition_count);
-            }
-            status = 0;
-
-            char ab[] = {
-#ifdef BUTTON_A_PORT
-                IS_PRESSED(button_a) ? 'A' : ' ',
-#else
-                ' ',
-#endif
-#ifdef BUTTON_B_PORT
-                IS_PRESSED(button_b) ? 'B' : ' ',
-#else
-                ' ',
-#endif
-#ifdef BUTTON_R_PORT
-                IS_PRESSED(button_r) ? 'R' : ' ',
-#else
-                ' ',
-#endif
-                0
-            };
-            
-            lcd_move(0, 0);
-            lcd_printf("F:% 2u %s %-6s", FlameData.sensor/1000, ab, state_name[FlameData.state]);
-            lcd_move(0, 1);
-            lcd_printf("O:%3d" SYM_DEG "C W:%3d" SYM_DEG "C", (int)oil->Current / 10, (int)water->Current / 10);
-        }
         
         Button_Task();
         

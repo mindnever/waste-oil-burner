@@ -145,6 +145,23 @@ void lcd_printf(const char *fmt, ...)
   va_end(ap);
 }
 
+void lcd_printf_P(const char *fmt, ...)
+{
+  va_list ap;
+  char tmp[LCD_ROWS * LCD_COLS];
+  
+  va_start(ap, fmt);
+  
+  vsnprintf_P(tmp, sizeof(tmp), fmt, ap);
+  char ch;
+  
+  for(int i = 0; i < sizeof(tmp) && (ch = tmp[i]); ++i) {
+    lcd_data(ch);
+  }
+
+  va_end(ap);
+}
+
 void lcd_move(uint8_t x, uint8_t y)
 {
   const uint8_t row_offsetsDef[]   = { 0x00, 0x40, 0x14, 0x54 }; // For regular LCDs
