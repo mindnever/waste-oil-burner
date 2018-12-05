@@ -6,6 +6,8 @@
 #include "vcp.h"
 
 #include <util/crc16.h>
+#include <avr/eeprom.h>
+#include <string.h>
 
 #define EELAYOUT_VERSION 1
 

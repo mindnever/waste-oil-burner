@@ -1,3 +1,4 @@
+#include <util/delay.h>
 #include <avr/wdt.h>
 #include <avr/pgmspace.h>
 #include <avr/interrupt.h>
@@ -97,7 +98,10 @@ static uint8_t force_hid_reports;
 static void do_hid_report_03();
 static void do_hid_report_04();
 
+#ifdef HAVE_ENCODER
 static int8_t encoder_event;
+#endif
+
 static uint8_t monitor_mode;
 static microrl_t mrl;
 
@@ -700,9 +704,11 @@ void do_hid_report_03()
     if(IS_PRESSED(button_b)) {
         report.Inputs |= WOB_REPORT_INPUT_BUTTON_B;
     }
+#ifdef BUTTON_R_PORT
     if(IS_PRESSED(button_r)) {
         report.Inputs |= WOB_REPORT_INPUT_BUTTON_R;
     }
+#endif
     if(IS_BURNING()) {
         report.Inputs |= WOB_REPORT_INPUT_BURNING;
     }
