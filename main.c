@@ -58,6 +58,7 @@
 #define BUTTON_DEBOUNCE (30/TICK_MS)
 #define FORCE_HID_REPORTS (1000/TICK_MS)
 
+#define MASTER_ENABLE IS_PRESSED(button_b)
 
 
 static const char *state_name[] = {
@@ -667,7 +668,7 @@ int main(void)
 
         Update_ZoneFlags();
         
-        Zones_Update(); // run thermostat functions
+        Zones_Update( MASTER_ENABLE ); // run thermostat functions
         
         // Do zone outputs :O
         Update_Outputs();

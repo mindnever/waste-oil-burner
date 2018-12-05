@@ -26,27 +26,37 @@ void Zones_Init(void)
 
 void Zones_SetCurrent(sensor_type_t type, uint16_t id, int16_t current)
 {
+    uint16_t rfrx_id = id;
+    
     for(uint8_t i = 0; i < _WOB_REPORT_ZONE_COUNT; ++i) {
         ThermalZone *zone = Zones_GetZone(i);
         if(!zone) { continue; }// how can this be? cannot..
         
+        rfrx_id = id;
+        
+        if((zone->Config.SensorType == SENSOR_RFRX)
+            && (zone->Config.SensorID <= 3)) { // check just channel ID, ignore sensor id
+            rfrx_id = id >> 8;
+        } else {
+            rfrx_id = id;
+        }
+        
+        
         if((zone->Config.SensorType == type)
-        && ((type != SENSOR_RFRX) || (id == zone->Config.SensorID))) {
+        && ((type != SENSOR_RFRX) || (rfrx_id == zone->Config.SensorID))) {
             zone->Current = current;
         }
     }
 }
 
-void Zones_Update()
+void Zones_Update(uint8_t master_enable)
 {
     for(uint8_t i = 0; i < _WOB_REPORT_ZONE_COUNT; ++i) {
         ThermalZone *zone = Zones_GetZone(i);
         if(!zone) { continue; }// how can this be? cannot..
-        if(!(zone->Flags & WOB_REPORT_FLAGS_CONTROL_ENABLED)) {
+        if(!master_enable || !(zone->Flags & WOB_REPORT_FLAGS_CONTROL_ENABLED)) {
             zone->Flags &= ~WOB_REPORT_FLAGS_OUTPUT_ACTIVE;
-            continue;
-        }
-        if(zone->Current < (zone->Config.SetPoint - zone->Config.Hysteresis)) {
+        } else if(zone->Current < (zone->Config.SetPoint - zone->Config.Hysteresis)) {
             zone->Flags |= WOB_REPORT_FLAGS_OUTPUT_ACTIVE;
         } else if(zone->Current > zone->Config.SetPoint) {
             zone->Flags &= ~WOB_REPORT_FLAGS_OUTPUT_ACTIVE;

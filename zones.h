@@ -60,7 +60,7 @@ ThermalZone *Zones_GetZone(enum ZoneID id);
 
 void Zones_Init(void);
 void Zones_SetCurrent(sensor_type_t type, uint16_t id, int16_t current);
-void Zones_Update();
+void Zones_Update(uint8_t master_enable);
 void Zones_Dump();
 void Zones_DumpZone(enum ZoneID id, ThermalZone *zone);
 void Zones_ZoneCLI(ThermalZone *zone, int argc, const char * const *argv);
