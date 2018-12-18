@@ -4,6 +4,7 @@
 
 void EEConfig_Load(void);
 void EEConfig_Save(void);
+void EEConfig_Format(void);
 
 
 #endif /* _WOB_EECONFIG_H_ */

@@ -153,6 +153,8 @@ static int CLI_Execute(int argc, const char * const *argv)
             }
         }
         VCP_Printf_P(PSTR("HID reporting is %s\r\n"), hid_enabled ? "on" : "off");
+    } else if(!strcasecmp(argv[0], "eeprom") && (argc > 1) && !strcasecmp(argv[1], "format")) {
+        EEConfig_Format();
     } else if(!strcasecmp(argv[0], "uptime")) {
         VCP_Printf_P(PSTR("%lu\r\n"), uptime);
     } else if(!strcasecmp(argv[0], "info")) {

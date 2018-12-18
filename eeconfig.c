@@ -25,9 +25,11 @@ void EEConfig_Load(void)
     struct EELayout buffer;
     
     eeprom_read_block(&buffer, &eevars, sizeof(buffer));
-    
+
+    VCP_Printf_P(PSTR("EEConfig_Load() layout version %u @%u\r\n"), buffer.Version, &eevars);
+
     if(buffer.Version != EELAYOUT_VERSION) {
-        VCP_Printf("EEConfig_Load() layout version mismatch %u != %u\r\n", buffer.Version, EELAYOUT_VERSION);
+        VCP_Printf_P(PSTR("EEConfig_Load() layout version mismatch %u != %u\r\n"), buffer.Version, EELAYOUT_VERSION);
         return;
     }
     
@@ -42,8 +44,11 @@ void EEConfig_Load(void)
     }
     
     if(ecrc != crc) {
-        VCP_Printf("EEConfig_Load() bad crc %u != %u\r\n", ecrc, crc);
+        VCP_Printf_P(PSTR("EEConfig_Load() bad crc %u != %u\r\n"), ecrc, crc);
+        return;
     }
+    
+    VCP_Printf_P(PSTR("EEConfig_Load() crc ok stored %u calculated %u\r\n"), ecrc, crc);
     
     for(uint8_t i = 0; i < NUM_ZONES; ++i) {
         ThermalZone *zone = Zones_GetZone(i);
@@ -84,4 +89,9 @@ void EEConfig_Save(void)
     buffer.CRC = crc;
     
     eeprom_write_block(&buffer, &eevars, sizeof(buffer));
+}
+
+void EEConfig_Format(void)
+{
+    eeprom_write_byte(&eevars.Version, 0);
 }
