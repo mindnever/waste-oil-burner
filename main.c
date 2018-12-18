@@ -103,6 +103,7 @@ static int8_t encoder_event;
 #endif
 
 static uint8_t monitor_mode;
+static uint8_t hid_enabled = 1;
 static microrl_t mrl;
 
 #ifdef BUTTON_A_PORT
@@ -143,6 +144,15 @@ static int CLI_Execute(int argc, const char * const *argv)
     if(!strcasecmp(argv[0], "monitor")) {
         monitor_mode = 1;
         VCP_Printf_P(PSTR("Monitor mode on\r\n"));
+    } else if(!strcasecmp(argv[0], "hid")) {
+        if(argc > 1) {
+            if(!strcasecmp(argv[1], "on")) {
+                hid_enabled = 1;
+            } else if(!strcasecmp(argv[1], "off")) {
+                hid_enabled = 0;
+            }
+        }
+        VCP_Printf_P(PSTR("HID reporting is %s\r\n"), hid_enabled ? "on" : "off");
     } else if(!strcasecmp(argv[0], "uptime")) {
         VCP_Printf_P(PSTR("%lu\r\n"), uptime);
     } else if(!strcasecmp(argv[0], "info")) {
@@ -600,6 +610,8 @@ int main(void)
 
     VCP_Init();
 
+    VCP_Printf_P(PSTR("Booting\r\n"));
+
     IO_Init();
     
     Init_ThermalZones();
@@ -621,7 +633,7 @@ int main(void)
 #endif
     
     ADC_Init();
-    
+
     EEConfig_Load();
     
     twi_init();
@@ -633,7 +645,6 @@ int main(void)
     
     sei();
     
-    VCP_Printf_P(PSTR("Booting\r\n"));
     
     for(;;)
     {
@@ -677,10 +688,12 @@ int main(void)
         // Do zone outputs :O
         Update_Outputs();
         
-        do_hid_report_03();
-        do_hid_report_04();
+        if(hid_enabled) {
+            do_hid_report_03();
+            do_hid_report_04();
         
-        force_hid_reports = 0;
+            force_hid_reports = 0;
+        }
     }
 }
 
@@ -792,7 +805,9 @@ void on_rfrx_sensor_data(struct RfRx_SensorData *data)
     report.Humidity = data->humidity;
     report.Battery = data->battery ? 100 : 10;
     
-    HID_Report(0x02, &report, sizeof(report));
+    if(hid_enabled) {
+        HID_Report(0x02, &report, sizeof(report));
+    }
 
     if(monitor_mode) {
         VCP_Printf_P(PSTR("{\"signal\":\"%u/%u\",\"batt\":%u,\"sensor_id\":%u,\"temperature\":%d.%u,\"t_%u\":\"%d.%u\",\"humidity\": %u, \"raw\": \"%s\"}\r\n"), data->_matching, data->_samples, data->battery, sensor_id , t_int, t_frac,  sensor_id, t_int, t_frac, data->humidity, raw);
