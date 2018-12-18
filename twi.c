@@ -20,7 +20,7 @@
 #define TWI_SCL_PIN PD0
 #define TWI_SDA_PIN PD1
 
-#elif (BOARD == BOARD_PROMINI)
+#elif (BOARD == BOARD_PROMINI) || (BOARD == BOARD_UNO)
 
 #define TWI_PRE    1        // my TWI prescaler value 
 

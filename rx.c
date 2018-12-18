@@ -91,10 +91,12 @@ ISR (TIMER1_CAPT_vect)
   // enable irq
   TIMSK1 |= _BV(OCIE1A);
 
-#if (BOARD == BOARD_PROMICRO)
+#if (F_CPU == 16000000)
   uint16_t len = (capture - prev) / 2;
-#elif (BOARD == BOARD_PROMINI)
+#elif (F_CPU == 8000000)
   uint16_t len = (capture - prev);
+#else
+# error Unsupported F_CPU
 #endif
 
 

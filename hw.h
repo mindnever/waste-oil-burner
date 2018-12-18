@@ -5,6 +5,8 @@
 # include "hw_promicro.h"
 #elif (BOARD == BOARD_PROMINI)
 # include "hw_promini.h"
+#elif (BOARD == BOARD_UNO)
+# include "hw_uno.h"
 #endif
 
 #if defined(ENCODER_A_PORT) && defined(ENCODER_B_PORT) && defined(BUTTON_R_PORT)

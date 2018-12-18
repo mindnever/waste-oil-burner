@@ -43,11 +43,22 @@ AVRDUDE = avrdude -v -c arduino -p $(DEVICE) -P/dev/ttyAMA0 -b57600
 
 OBJECTS += usb_stubs.o
 
+else
+ifeq ($(BOARD),UNO)
+
+DEVICE=atmega328p
+FLASH=28672
+RAM=2048
+F_CPU = 16000000
+AVRDUDE = avrdude -v -c arduino -p $(DEVICE) -P/dev/cu.wchusbserialfa2330 -b115200
+
+OBJECTS += usb_stubs.o
+
+endif
 endif
 endif
 
-
-DEFINES += -DF_CPU=$(F_CPU) -DBOARD=BOARD_$(BOARD) -DBOARD_PROMICRO=100 -DBOARD_PROMINI=101 -DTICK_MS=$(TICK_MS)
+DEFINES += -DF_CPU=$(F_CPU) -DBOARD=BOARD_$(BOARD) -DBOARD_PROMICRO=100 -DBOARD_PROMINI=101 -DBOARD_UNO=102 -DTICK_MS=$(TICK_MS)
 
 COMPILE = avr-gcc -Wall -O2 -std=gnu99 -I. -mmcu=$(DEVICE) $(DEFINES) $(LUFA_CFLAGS) -ffunction-sections -fdata-sections -funsigned-char -funsigned-bitfields -fpack-struct -fshort-enums -ffreestanding
 LINK = avr-gcc $(LUFA_LIBS)  -Wl,--gc-sections -Wl,--relax -mmcu=$(DEVICE) -Wl,-u,vfprintf -lprintf_flt -lm
@@ -107,7 +118,7 @@ size:
 # on Windows with WinAVR where the Unix commands will fail.
 
 avrdude: firmware.hex
-	$(AVRDUDE) avrdude -c arduino -p $(DEVICE) -U flash:w:firmware.hex
+	$(AVRDUDE) -U flash:w:firmware.hex
 
 avrdude-nodep:
 	avrdude -c usbasp -p atmega8 -U lfuse:w:0x9f:m -U hfuse:w:0xc9:m -U flash:w:firmware.hex
