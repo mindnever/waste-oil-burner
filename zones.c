@@ -56,7 +56,7 @@ void Zones_Update(uint8_t master_enable)
         if(!zone) { continue; }// how can this be? cannot..
         if(!master_enable || !(zone->Flags & WOB_REPORT_FLAGS_CONTROL_ENABLED)) {
             zone->Flags &= ~WOB_REPORT_FLAGS_OUTPUT_ACTIVE;
-        } else if(zone->Current < (zone->Config.SetPoint - zone->Config.Hysteresis)) {
+        } else if(zone->Current < (zone->Config.SetPoint - (int16_t)zone->Config.Hysteresis)) {
             zone->Flags |= WOB_REPORT_FLAGS_OUTPUT_ACTIVE;
         } else if(zone->Current > zone->Config.SetPoint) {
             zone->Flags &= ~WOB_REPORT_FLAGS_OUTPUT_ACTIVE;
@@ -118,7 +118,9 @@ void Zones_ZoneCLI(ThermalZone *zone, int argc, const char * const *argv)
         }
     } else if(!strcasecmp(argv[0], "sensor")) {
         if(argc > 1) {
-            if(!strcasecmp(argv[1], "analog1")) {
+            if(!strcasecmp(argv[1], "none")) {
+                zone->Config.SensorType = SENSOR_NONE;
+            } else if(!strcasecmp(argv[1], "analog1")) {
                 zone->Config.SensorType = SENSOR_ANALOG1;
             } else if(!strcasecmp(argv[1], "analog2")) {
                 zone->Config.SensorType = SENSOR_ANALOG2;
