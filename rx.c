@@ -19,8 +19,14 @@
 #define TIMER1_MS_TICKS (F_TIMER1 / 1000)
 #define TIMER1_TIMEOUT_TICKS (TIMER1_TIMEOUT_MS * TIMER1_MS_TICKS)
 
+#define IDLE_TICKS (TICK_MS * TIMER1_MS_TICKS)
+
 #if TIMER1_TIMEOUT_TICKS > 65534
-#error TIMER1_TIMEOUT_TICKS too big
+# error TIMER1_TIMEOUT_TICKS too big
+#endif
+
+#if IDLE_TICKS > 65534
+# error IDLE_TICKS too big
 #endif
 
 #define RX_SAMPLES 400
@@ -32,6 +38,22 @@ static uint8_t timer1_comp;
 
 static uint8_t RfRx_decode(RfRx_Callback cb);
 // static void RfRx_dump();
+
+uint16_t sys_idle_ticks = IDLE_TICKS;
+uint16_t sys_busy_ticks = 0;
+uint32_t sys_millis;
+
+static uint16_t sys_idle_exit = 0;
+
+
+void Sys_Idle()
+{
+  sys_millis += TICK_MS;
+  sys_busy_ticks = sys_idle_exit - TCNT1;
+  while(TCNT1 != sys_idle_exit);
+  sys_idle_exit += IDLE_TICKS;
+
+}
 
 void RfRx_Init()
 {
@@ -47,6 +69,7 @@ void RfRx_Init()
 
   TIMSK1 = _BV(ICIE1); // enable input capture interrupt
 
+  sys_idle_exit = TCNT1 + IDLE_TICKS;
 }
 
 void RfRx_Task(RfRx_Callback cb)

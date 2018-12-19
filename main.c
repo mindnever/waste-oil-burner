@@ -88,8 +88,6 @@ typedef enum {
 static ui_mode_t ui_mode = UI_MODE_STATUS;
 static uint8_t ui_refresh = 0;
 
-static uint32_t uptime;
-
 static void on_rfrx_sensor_data(struct RfRx_SensorData *data);
 
 static uint16_t force_hid_reports_counter;
@@ -125,6 +123,7 @@ static void CLI_Dfu()
 
 static void CLI_Info()
 {
+    VCP_Printf_P(PSTR("CPU Usage: %.1f%%\r\n"), 100.0 - (((float)sys_busy_ticks / (float)sys_idle_ticks) * 100));
     uint16_t bootloader_signature = pgm_read_word_near( BOOTLOADER_MAGIC_SIGNATURE_START );
     VCP_Printf_P(PSTR("bootloader_signature: %02x\r\n"), bootloader_signature);
     if(bootloader_signature != BOOTLOADER_MAGIC_SIGNATURE) {
@@ -156,7 +155,7 @@ static int CLI_Execute(int argc, const char * const *argv)
     } else if(!strcasecmp(argv[0], "eeprom") && (argc > 1) && !strcasecmp(argv[1], "format")) {
         EEConfig_Format();
     } else if(!strcasecmp(argv[0], "uptime")) {
-        VCP_Printf_P(PSTR("%lu\r\n"), uptime);
+        VCP_Printf_P(PSTR("%lu\r\n"), sys_millis / 1000);
     } else if(!strcasecmp(argv[0], "info")) {
         CLI_Info();
     } else if(!strcasecmp(argv[0], "dfu")) {
@@ -650,8 +649,6 @@ int main(void)
     
     for(;;)
     {
-        ++uptime;
-        
         wdt_reset();
         
 #if defined(USE_USB_VCP) || defined(USE_USB_HID)
@@ -673,10 +670,7 @@ int main(void)
         
         ADC_Task();
         
-        _delay_ms(TICK_MS);
-        
         UI_Task();
-        
         
         Button_Task();
         
@@ -696,6 +690,8 @@ int main(void)
         
             force_hid_reports = 0;
         }
+        
+        Sys_Idle();
     }
 }
 

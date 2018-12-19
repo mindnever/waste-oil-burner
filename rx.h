@@ -19,6 +19,10 @@ void RfRx_Init(void);
 void RfRx_Task(RfRx_Callback cb);
 
 
+void Sys_Idle(void);
 
+extern uint16_t sys_idle_ticks;
+extern uint16_t sys_busy_ticks;
+extern uint32_t sys_millis;
 
 #endif /* _RF_RX_RX_H_ */
