@@ -268,6 +268,24 @@ static void IO_Init()
     IO_PIN_HIGH( BUTTON_B ); // pullup
 #endif
 
+#ifdef RELAY_ZONE_EXT1_PORT
+    RELAY_OFF( RELAY_ZONE_EXT1 );
+    IO_DIR_OUT( RELAY_ZONE_EXT1 );
+#endif
+#ifdef RELAY_ZONE_EXT2_PORT
+    RELAY_OFF( RELAY_ZONE_EXT2 );
+    IO_DIR_OUT( RELAY_ZONE_EXT2 );
+#endif
+#ifdef RELAY_ZONE_EXT3_PORT
+    RELAY_OFF( RELAY_ZONE_EXT3 );
+    IO_DIR_OUT( RELAY_ZONE_EXT3 );
+#endif
+#ifdef RELAY_ZONE_EXT4_PORT
+    RELAY_OFF( RELAY_ZONE_EXT4 );
+    IO_DIR_OUT( RELAY_ZONE_EXT4 );
+#endif
+
+
 #ifdef HAVE_ENCODER
     IO_DIR_IN( BUTTON_R );
     IO_PIN_HIGH( BUTTON_R ); // pullup
