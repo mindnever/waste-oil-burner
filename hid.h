@@ -58,10 +58,20 @@ typedef struct
     int16_t  Current;
 } __attribute__((__packed__)) HID_WOB_Report_04_t;
 
+typedef struct
+{
+    uint8_t Zone;
+    int16_t SetPoint;
+    uint16_t Hysteresis;
+    uint8_t SensorType;
+    uint16_t SensorID;
+} __attribute__((__packed__)) HID_WOB_Report_05_t; // Zone configuration
+
 typedef union {
     HID_RfRx_Report_02_t r02;
     HID_WOB_Report_03_t r03;
     HID_WOB_Report_04_t r04;
+    HID_WOB_Report_05_t r05;
 } HID_Report_Storage_t;
 
 bool HID_Report(uint8_t reportId, const void *reportData, uint8_t reportSize);
