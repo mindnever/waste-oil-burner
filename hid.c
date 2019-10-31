@@ -86,15 +86,18 @@ bool CALLBACK_HID_Device_CreateHIDReport(USB_ClassInfo_HID_Device_t* const HIDIn
                                          void* ReportData,
                                          uint16_t* const ReportSize)
 {
+    bool ret = false;
+    
     switch(ReportType) {
         case HID_REPORT_ITEM_In:
             *ReportSize = 0;
             for(uint8_t i = 0; i < REPORT_QUEUE_SIZE; ++i) {
-              if(queued[i].size) {
+              if(queued[i].size && ((*ReportID == 0) || (*ReportID == queued[i].id))) {
                 memcpy(ReportData, &queued[i].data, queued[i].size);
                 *ReportSize = queued[i].size;
                 *ReportID = queued[i].id;
                 queued[i].size = 0;
+                ret = true;
                 break;
               }
             }
@@ -105,7 +108,7 @@ bool CALLBACK_HID_Device_CreateHIDReport(USB_ClassInfo_HID_Device_t* const HIDIn
             break;
 	}
 
-	return true;
+	return ret;
 }
 
 /** HID class driver callback function for the processing of HID reports from the host.
