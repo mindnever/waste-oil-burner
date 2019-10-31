@@ -37,7 +37,7 @@
 # define cpu_to_le16(x)           (x)
 #endif
 
-#define SYM_DEG "\xdf"
+#define SYM_DEG "\x01"
 
 
 

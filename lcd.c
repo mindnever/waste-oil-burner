@@ -194,6 +194,17 @@ void lcd_init()
 
   lcd_command( LCD_CLEARDISPLAY );
   _delay_ms(2);
+  
+  // define degree symbol
+  lcd_command( LCD_SETCGRAMADDR + 8);
+  lcd_data( 0x1c );
+  lcd_data( 0x14 );
+  lcd_data( 0x1c );
+  lcd_data( 0 );
+  lcd_data( 0 );
+  lcd_data( 0 );
+  lcd_data( 0 );
+  lcd_data( 0 );  
 
   lcd_backlight(true);
 }
