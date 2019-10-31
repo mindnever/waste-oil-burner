@@ -52,6 +52,7 @@
 #define IS_PRESSED(b) ((b) == BUTTON_DEBOUNCE)
 
 #define DELAY_STATUS (500/TICK_MS)
+#define CYCLE_TEMP (3000/TICK_MS)
 
 #define LCD_REINIT (30000/TICK_MS)
 #define UI_IDLE_TIMEOUT (5000/TICK_MS)
@@ -462,6 +463,8 @@ static void UI_Task()
     static uint8_t status = 0;
     static uint16_t lcd_reinit = 0;
     static uint16_t ui_idle = 0;
+    static uint8_t current_zone = 0;
+    static uint16_t cycle = 0;
 
     static UI_Setpoint setpoint = { 
         .Min = 0,
@@ -563,6 +566,7 @@ static void UI_Task()
     }
 #endif
 
+    ++cycle;
     ++status;
     if((status > DELAY_STATUS) || (ui_refresh)) {
         status = 0;
@@ -573,11 +577,26 @@ static void UI_Task()
             lcd_init();
         }
         
-        ThermalZone *oil = Zones_GetZone(ZONE_ID_OIL),
-                  *water = Zones_GetZone(ZONE_ID_WATER);
+        ThermalZone *oil = Zones_GetZone(ZONE_ID_OIL);
+        
+        static const char *zn[] = {
+            "W", "1", "2", "3", "4", 0
+        };
+        
+        
+        if(cycle > CYCLE_TEMP) {
+            cycle = 0;
+            ++current_zone;
+
+            if(!zn[current_zone)) {
+                current_zone = 0;
+            }
+        }
+        
+        ThermalZone *zone = Zones_GetZone(ZONE_ID_WATER + current_zone);
         
         if(monitor_mode) { // TODO: output JSON for MQTT
-            VCP_Printf_P(PSTR("State:%d [%s], s_A:%u, s_B:%u, s_C:%u, t_Oil:%.1f, t_Water:%.1f, Flame:%d IgnCount:%d\r\n"), FlameData.state, state_name[FlameData.state], FlameData.sensor, raw_adc[1], raw_adc[2], (float)oil->Current / 10, (float)water->Current / 10, (int)FlameData.burning, (int)FlameData.ignition_count);
+            VCP_Printf_P(PSTR("State:%d [%s], s_A:%u, s_B:%u, s_C:%u, t_Oil:%.1f, t_%s:%.1f, Flame:%d IgnCount:%d\r\n"), FlameData.state, state_name[FlameData.state], FlameData.sensor, raw_adc[1], raw_adc[2], (float)oil->Current / 10, zn[current_zone], (float)zone->Current / 10, (int)FlameData.burning, (int)FlameData.ignition_count);
         }
 
 
@@ -606,7 +625,7 @@ static void UI_Task()
         
         switch(ui_mode) {
             case UI_MODE_STATUS:
-                lcd_printf_P(PSTR("O:%3d" SYM_DEG "C  W:%3d" SYM_DEG "C"), (int)oil->Current / 10, (int)water->Current / 10);
+                lcd_printf_P(PSTR("O:%3d" SYM_DEG "C  %s:%3d" SYM_DEG "C"), (int)oil->Current / 10, zn[current_zone], (int)zone->Current / 10);
                 break;
             default:break;
         }
