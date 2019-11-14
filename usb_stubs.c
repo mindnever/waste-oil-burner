@@ -64,7 +64,7 @@
 #   define  ODDBG_UDR   UDR0
 #endif
 
-#define BAUD2DIV(baud)  ((((F_CPU/8)/baud)-1)/2)
+#define BAUD2DIV(baud)  (((F_CPU/16)/baud)-1)
 
 #define VCP_RX_FIFO_SIZE 64
 
@@ -120,7 +120,7 @@ ISR (USART_RX_vect)
 void  VCP_Init(void)
 {
     ODDBG_UCR |= _BV(ODDBG_TXEN) | _BV(ODDBG_RXEN) | _BV(ODDBG_RXCIE);
-    ODDBG_UBRR = BAUD2DIV(57600);
+    ODDBG_UBRR = BAUD2DIV(38400);
     
     IO_DIR_OUT( UART_TX );
     IO_DIR_IN( UART_RX );

@@ -1,7 +1,7 @@
 #ifndef _WOB_ADC_H_
 #define _WOB_ADC_H_
 
-#define NUM_ANALOG_SENSORS 2
+#define NUM_ANALOG_SENSORS 3
 
 typedef struct {
     float gain;
@@ -13,7 +13,7 @@ typedef struct {
 } AnalogSensorConfiguration;
 
 extern AnalogSensorConfiguration ADC_Config;
-extern uint16_t raw_adc[3];
+extern uint16_t raw_adc[NUM_ANALOG_SENSORS + 1];
 
 
 void ADC_Init(void);

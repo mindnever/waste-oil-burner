@@ -9,7 +9,7 @@
 #include <avr/eeprom.h>
 #include <string.h>
 
-#define EELAYOUT_VERSION 1
+#define EELAYOUT_VERSION 3
 
 struct EELayout {
     uint8_t  Version;

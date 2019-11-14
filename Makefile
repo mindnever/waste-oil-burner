@@ -22,7 +22,7 @@ FLASH=28672
 RAM=2500
 F_CPU = 16000000
 
-OBJECTS += usb_descriptors.o hid.o vcp.o usb.o
+OBJECTS += usb_descriptors.o hid.o vcp.o usb.o lcd_i2c.o
 DFU_PROGRAMMER=sudo dfu-programmer
 
 LUFA_PATH = ../lufa-build
@@ -39,9 +39,9 @@ DEVICE=atmega328p
 FLASH=28672
 RAM=2048
 F_CPU = 8000000
-AVRDUDE = avrdude -v -c arduino -p $(DEVICE) -P/dev/ttyAMA0 -b57600
+AVRDUDE = avrdude -v -c arduino -p $(DEVICE) -P/dev/tty.SLAB_USBtoUART -b57600
 
-OBJECTS += usb_stubs.o
+OBJECTS += usb_stubs.o lcd_gpio.o
 
 else
 ifeq ($(BOARD),UNO)
@@ -58,7 +58,7 @@ endif
 endif
 endif
 
-DEFINES += -DF_CPU=$(F_CPU) -DBOARD=BOARD_$(BOARD) -DBOARD_PROMICRO=100 -DBOARD_PROMINI=101 -DBOARD_UNO=102 -DTICK_MS=$(TICK_MS)
+DEFINES += -DF_CPU=$(F_CPU) -DBOARD=BOARD_$(BOARD) -DBOARD_PROMICRO=100 -DBOARD_PROMINI=101 -DTICK_MS=$(TICK_MS)
 
 COMPILE = avr-gcc -Wall -O2 -std=gnu99 -I. -mmcu=$(DEVICE) $(DEFINES) $(LUFA_CFLAGS) -ffunction-sections -fdata-sections -funsigned-char -funsigned-bitfields -fpack-struct -fshort-enums -ffreestanding
 LINK = avr-gcc $(LUFA_LIBS)  -Wl,--gc-sections -Wl,--relax -mmcu=$(DEVICE) -Wl,-u,vfprintf -lprintf_flt -lm

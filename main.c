@@ -49,7 +49,8 @@
 #define DEFAULT_OIL_TEMP_HYST 1
 #define DEFAULT_WATER_TEMP_HYST 15
 
-#define IS_PRESSED(b) ((b) == BUTTON_DEBOUNCE)
+#define IS_PRESSED(b) ((b) >= BUTTON_DEBOUNCE)
+#define IS_LONGPRESS(b) ((b) >= BUTTON_LONGPRESS)
 
 #define DELAY_STATUS (500/TICK_MS)
 #define CYCLE_TEMP (3000/TICK_MS)
@@ -58,6 +59,8 @@
 #define UI_IDLE_TIMEOUT (5000/TICK_MS)
 
 #define BUTTON_DEBOUNCE (30/TICK_MS)
+#define BUTTON_LONGPRESS (3000/TICK_MS)
+
 #define FORCE_HID_REPORTS (1000/TICK_MS)
 
 #define MASTER_ENABLE IS_PRESSED(button_b)
@@ -102,17 +105,17 @@ static int8_t encoder_event;
 #endif
 
 static uint8_t monitor_mode;
-static uint8_t hid_enabled = 1;
+static uint8_t hid_enabled = 0;
 static microrl_t mrl;
 
 #ifdef BUTTON_A_PORT
-static int button_a;
+static uint16_t button_a;
 #endif
 #ifdef BUTTON_B_PORT
-static int button_b;
+static uint16_t button_b;
 #endif
 #ifdef BUTTON_R_PORT
-static int button_r;
+static uint16_t button_r;
 #endif    
 
 static void CLI_Dfu()
@@ -165,12 +168,13 @@ static int CLI_Execute(int argc, const char * const *argv)
         if(argc > 1) {
             if(!strcasecmp(argv[1], "print")) {
                 // print analog calibration
-                VCP_Printf_P(PSTR("analog 1 gain %f offset %f\r\n"), ADC_Config.Calibration[0].gain, ADC_Config.Calibration[0].offset);
-                VCP_Printf_P(PSTR("analog 2 gain %f offset %f\r\n"), ADC_Config.Calibration[1].gain, ADC_Config.Calibration[1].offset);
+                for(unsigned index = 0; index < NUM_ANALOG_SENSORS; ++index) {
+                    VCP_Printf_P(PSTR("analog %u gain %f offset %f\r\n"), index + 1, ADC_Config.Calibration[index].gain, ADC_Config.Calibration[index].offset);
+                }
             } else {
                 if(argc > 3) {
                     unsigned index = atoi(argv[1]);
-                    if(index == 1 || index == 2) {
+                    if(index >= 1 && index <= NUM_ANALOG_SENSORS) {
                         --index;
                         
                         if(!strcasecmp(argv[2], "gain")) {
@@ -184,7 +188,7 @@ static int CLI_Execute(int argc, const char * const *argv)
                         EEConfig_Save();
                         
                     } else {
-                        VCP_Printf_P(PSTR("Sensors 1 & 2 are supported only\r\n"));
+                        VCP_Printf_P(PSTR("Sensors 1, 2 & 3 are supported only\r\n"));
                     }
                     
                 } else {
@@ -255,7 +259,9 @@ static void IO_Init()
     IO_DIR_OUT( LED_B );
 #endif
 
+#ifdef RELAY_HEATER_PORT
     IO_DIR_OUT( RELAY_HEATER );
+#endif
     IO_DIR_OUT( RELAY_FAN );
     IO_DIR_OUT( RELAY_AIR );
     IO_DIR_OUT( RELAY_SPARK );
@@ -312,7 +318,8 @@ static void Init_ThermalZones(void)
     if( ( zone = Zones_GetZone( ZONE_ID_WATER ) ) ) {
         zone->Config.SetPoint = DEFAULT_TARGET_WATER_TEMPERATURE * 10;
         zone->Current = 0;
-        zone->Flags = 0;
+        zone->Active = false;
+        zone->Config.Enabled = false;
         zone->Config.SensorType = SENSOR_ANALOG2;
         zone->Config.Hysteresis = DEFAULT_WATER_TEMP_HYST * 10;
     }
@@ -320,22 +327,22 @@ static void Init_ThermalZones(void)
     if( ( zone = Zones_GetZone( ZONE_ID_OIL) ) ) {
         zone->Config.SetPoint = DEFAULT_TARGET_OIL_TEMPERATURE * 10;
         zone->Current = 0;
-        zone->Flags = 0;
+        zone->Active = false;
+        zone->Config.Enabled = false;
         zone->Config.SensorType = SENSOR_ANALOG1;
         zone->Config.Hysteresis = DEFAULT_OIL_TEMP_HYST * 10;
     }
     
-    if( ( zone = Zones_GetZone( ZONE_ID_EXT1 ) ) ) {
-        zone->Config.SetPoint = 22 * 10;
-        zone->Current = 0;
-        zone->Flags = WOB_REPORT_FLAGS_CONTROL_ENABLED;
-        zone->Config.SensorType = SENSOR_BINARY;
-        zone->Config.Hysteresis = 0.0;
-    }
-    
-    if( ( zone = Zones_GetZone( ZONE_ID_EXT2) ) ) {
-        zone->Current = 0;
-        zone->Flags = WOB_REPORT_FLAGS_CONTROL_ENABLED;
+    for(enum ZoneID id = ZONE_ID_EXT1; id <= ZONE_ID_EXT4; ++id) {
+        if( ( zone = Zones_GetZone(id) ) ) {
+            zone->Current = 0;
+            zone->Active = false;
+            zone->Config.Enabled = false;
+            zone->Config.SetPoint = 0;
+            zone->Config.SensorType = SENSOR_NONE;
+            zone->Config.SensorID = 0;
+            zone->Config.Hysteresis = 0;
+        }
     }
     
     Zones_Init();
@@ -344,35 +351,37 @@ static void Init_ThermalZones(void)
 static void Update_ZoneFlags(void)
 {
 
-    if( ( (Zones_GetZone( ZONE_ID_EXT1 )->Flags & WOB_REPORT_FLAGS_OUTPUT_ACTIVE)
-        || (Zones_GetZone( ZONE_ID_EXT2 )->Flags & WOB_REPORT_FLAGS_OUTPUT_ACTIVE)
-        || (Zones_GetZone( ZONE_ID_EXT3 )->Flags & WOB_REPORT_FLAGS_OUTPUT_ACTIVE)
-        || (Zones_GetZone( ZONE_ID_EXT4 )->Flags & WOB_REPORT_FLAGS_OUTPUT_ACTIVE) ) ) {
+    if( ( (Zones_GetZone( ZONE_ID_EXT1 )->Active)
+        || (Zones_GetZone( ZONE_ID_EXT2 )->Active)
+        || (Zones_GetZone( ZONE_ID_EXT3 )->Active)
+        || (Zones_GetZone( ZONE_ID_EXT4 )->Active) ) ) {
 
-        Zones_GetZone( ZONE_ID_WATER )->Flags |= WOB_REPORT_FLAGS_CONTROL_ENABLED;
+        Zones_GetZone( ZONE_ID_WATER )->Config.Enabled = true;
 
     } else {
 
-        Zones_GetZone( ZONE_ID_WATER )->Flags &= ~WOB_REPORT_FLAGS_CONTROL_ENABLED;
+        Zones_GetZone( ZONE_ID_WATER )->Config.Enabled = false;
 
     }
 }
 
 static void Update_Outputs()
 {
-    if(Zones_GetZone(ZONE_ID_OIL)->Flags & WOB_REPORT_FLAGS_OUTPUT_ACTIVE) { RELAY_ON( RELAY_HEATER );    } else { RELAY_OFF( RELAY_HEATER );   }
+#ifdef RELAY_HEATER_PORT
+    if(Zones_GetZone(ZONE_ID_OIL)->Active) { RELAY_ON( RELAY_HEATER );    } else { RELAY_OFF( RELAY_HEATER );   }
+#endif
     // ZONE_ID_WATER is internally connected only
 #ifdef RELAY_ZONE_EXT1_PORT
-    if(Zones_GetZone(ZONE_ID_EXT1)->Flags & WOB_REPORT_FLAGS_OUTPUT_ACTIVE) { RELAY_ON( RELAY_ZONE_EXT1) ; } else { RELAY_OFF( RELAY_ZONE_EXT1); }
+    if(Zones_GetZone(ZONE_ID_EXT1)->Active) { RELAY_ON( RELAY_ZONE_EXT1) ; } else { RELAY_OFF( RELAY_ZONE_EXT1); }
 #endif
 #ifdef RELAY_ZONE_EXT2_PORT
-    if(Zones_GetZone(ZONE_ID_EXT2)->Flags & WOB_REPORT_FLAGS_OUTPUT_ACTIVE) { RELAY_ON( RELAY_ZONE_EXT2) ; } else { RELAY_OFF( RELAY_ZONE_EXT2); }
+    if(Zones_GetZone(ZONE_ID_EXT2)->Active) { RELAY_ON( RELAY_ZONE_EXT2) ; } else { RELAY_OFF( RELAY_ZONE_EXT2); }
 #endif
 #ifdef RELAY_ZONE_EXT3_PORT
-    if(Zones_GetZone(ZONE_ID_EXT3)->Flags & WOB_REPORT_FLAGS_OUTPUT_ACTIVE) { RELAY_ON( RELAY_ZONE_EXT3) ; } else { RELAY_OFF( RELAY_ZONE_EXT3); }
+    if(Zones_GetZone(ZONE_ID_EXT3)->Active) { RELAY_ON( RELAY_ZONE_EXT3) ; } else { RELAY_OFF( RELAY_ZONE_EXT3); }
 #endif
 #ifdef RELAY_ZONE_EXT4_PORT
-    if(Zones_GetZone(ZONE_ID_EXT4)->Flags & WOB_REPORT_FLAGS_OUTPUT_ACTIVE) { RELAY_ON( RELAY_ZONE_EXT4) ; } else { RELAY_OFF( RELAY_ZONE_EXT4); }
+    if(Zones_GetZone(ZONE_ID_EXT4)->Active) { RELAY_ON( RELAY_ZONE_EXT4) ; } else { RELAY_OFF( RELAY_ZONE_EXT4); }
 #endif
 }
 
@@ -415,7 +424,7 @@ static void Button_Task()
 {
 #ifdef BUTTON_A_PORT
     if( !IO_PIN_READ( BUTTON_A ) ) {
-        if(button_a < BUTTON_DEBOUNCE) {
+        if(button_a < BUTTON_LONGPRESS) {
             ++button_a;
         }
     } else {
@@ -429,7 +438,7 @@ static void Button_Task()
         
 #ifdef BUTTON_B_PORT
     if( !IO_PIN_READ( BUTTON_B ) ) {
-        if(button_b < BUTTON_DEBOUNCE) {
+        if(button_b < BUTTON_LONGPRESS) {
             ++button_b;
         }
     } else {
@@ -441,11 +450,15 @@ static void Button_Task()
 
 #ifdef BUTTON_R_PORT
     if( !IO_PIN_READ( BUTTON_R ) ) {
-        if(button_r < BUTTON_DEBOUNCE) {
+        if(button_r < BUTTON_LONGPRESS) {
             ++button_r;
         }
     } else {
         button_r = 0;
+    }
+    
+    if(IS_LONGPRESS(button_r)) {
+        Flame_Init();
     }
 #endif
 }
@@ -582,21 +595,41 @@ static void UI_Task()
         static const char *zn[] = {
             "W", "1", "2", "3", "4", 0
         };
+        static const enum ZoneID zi[] = {
+            ZONE_ID_WATER, ZONE_ID_EXT1, ZONE_ID_EXT2, ZONE_ID_EXT3, ZONE_ID_EXT4
+        };
         
         
         if(cycle > CYCLE_TEMP) {
             cycle = 0;
-            ++current_zone;
+            
+            for(int i = 0; i < 5; ++i) {
+                ++current_zone;
+                
 
-            if(!zn[current_zone)) {
-                current_zone = 0;
+                if(!zn[current_zone]) {
+                    current_zone = 0;
+                }
+
+                if(Zones_GetZone(zi[current_zone])->Config.SensorType != SENSOR_NONE) {
+                    break;
+                }
+
             }
         }
         
-        ThermalZone *zone = Zones_GetZone(ZONE_ID_WATER + current_zone);
+        ThermalZone *zone = Zones_GetZone(zi[current_zone]);
         
         if(monitor_mode) { // TODO: output JSON for MQTT
-            VCP_Printf_P(PSTR("State:%d [%s], s_A:%u, s_B:%u, s_C:%u, t_Oil:%.1f, t_%s:%.1f, Flame:%d IgnCount:%d\r\n"), FlameData.state, state_name[FlameData.state], FlameData.sensor, raw_adc[1], raw_adc[2], (float)oil->Current / 10, zn[current_zone], (float)zone->Current / 10, (int)FlameData.burning, (int)FlameData.ignition_count);
+            VCP_Printf_P(PSTR("State:%d [%s], s_A:%u, s_B:%u, s_C:%u, s_D:%u, t_Oil:%.1f, t_%s:%.1f, Flame:%d IgnCount:%d\r\n"),
+                                FlameData.state, state_name[FlameData.state],
+                                FlameData.sensor,
+                                raw_adc[1],
+                                raw_adc[2],
+                                raw_adc[3], 
+                                (float)oil->Current / 10, zn[current_zone],
+                                (float)zone->Current / 10,
+                                (int)FlameData.burning, (int)FlameData.ignition_count);
         }
 
 
@@ -620,7 +653,7 @@ static void UI_Task()
         };
 
         lcd_move(0, 0);
-        lcd_printf_P(PSTR("F:% 2u %s %-6s"), FlameData.sensor/1000, ab, state_name[FlameData.state]);
+        lcd_printf_P(PSTR("F:%02u %s %-6s"), FlameData.sensor/1000, ab, state_name[FlameData.state]);
         lcd_move(0, 1);
         
         switch(ui_mode) {
@@ -658,7 +691,9 @@ int main(void)
     microrl_set_execute_callback(&mrl, CLI_Execute);
     microrl_set_complete_callback(&mrl, CLI_GetCompletion);
     
+#ifdef RELAY_HEATER_PORT
     RELAY_OFF( RELAY_HEATER );
+#endif
     RELAY_OFF( RELAY_FAN );
     RELAY_OFF( RELAY_AIR );
     RELAY_OFF( RELAY_SPARK );
@@ -673,14 +708,18 @@ int main(void)
     ADC_Init();
 
     EEConfig_Load();
-    
+
+#ifdef LCD_DATA_PORT
+    lcd_gpio_init();
+#else
     twi_init();
+#endif
     lcd_init();
+
     RfRx_Init();
     
     Flame_Init();
 
-    
     sei();
     
     
@@ -746,12 +785,16 @@ void do_hid_report_03()
     report.WaterTemperature = cpu_to_le16( Zones_GetZone( ZONE_ID_WATER )->Current );
     
     report.Inputs = 0;
+#ifdef BUTTON_A_PORT
     if(IS_PRESSED(button_a)) {
         report.Inputs |= WOB_REPORT_INPUT_BUTTON_A;
     }
+#endif
+#ifdef BUTTON_B_PORT
     if(IS_PRESSED(button_b)) {
         report.Inputs |= WOB_REPORT_INPUT_BUTTON_B;
     }
+#endif
 #ifdef BUTTON_R_PORT
     if(IS_PRESSED(button_r)) {
         report.Inputs |= WOB_REPORT_INPUT_BUTTON_R;
@@ -762,9 +805,11 @@ void do_hid_report_03()
     }
     
     report.Outputs = 0;
+#ifdef RELAY_HEATER_PORT
     if(RELAY_STATE(RELAY_HEATER)) {
         report.Outputs |= WOB_REPORT_OUTPUT_HEATER;
     }
+#endif
     if(RELAY_STATE(RELAY_AIR)) {
         report.Outputs |= WOB_REPORT_OUTPUT_AIR;
     }
@@ -810,7 +855,7 @@ void do_hid_report_04()
         report.Zone = i;
         report.SetPoint = cpu_to_le16( zone->Config.SetPoint );
         report.Current = cpu_to_le16( zone->Current );
-        report.Flags = zone->Flags;
+        report.Flags = (zone->Active ? WOB_REPORT_FLAGS_OUTPUT_ACTIVE : 0) | (zone->Config.Enabled ? WOB_REPORT_FLAGS_CONTROL_ENABLED : 0);
         
         send_hid_report_04_if_changed(&report);
     }

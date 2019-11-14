@@ -54,12 +54,12 @@ void Zones_Update(uint8_t master_enable)
     for(uint8_t i = 0; i < _WOB_REPORT_ZONE_COUNT; ++i) {
         ThermalZone *zone = Zones_GetZone(i);
         if(!zone) { continue; }// how can this be? cannot..
-        if(!master_enable || !(zone->Flags & WOB_REPORT_FLAGS_CONTROL_ENABLED)) {
-            zone->Flags &= ~WOB_REPORT_FLAGS_OUTPUT_ACTIVE;
+        if(!master_enable || !zone->Config.Enabled) {
+            zone->Active = false;
         } else if(zone->Current < (zone->Config.SetPoint - (int16_t)zone->Config.Hysteresis)) {
-            zone->Flags |= WOB_REPORT_FLAGS_OUTPUT_ACTIVE;
+            zone->Active = true;;
         } else if(zone->Current > zone->Config.SetPoint) {
-            zone->Flags &= ~WOB_REPORT_FLAGS_OUTPUT_ACTIVE;
+            zone->Active = false;
         }
     }
 }
@@ -69,8 +69,8 @@ void Zones_DumpZone(enum ZoneID id, ThermalZone *zone)
     VCP_Printf_P(PSTR("zone %u (%s) %s %s setpoint %.1f current %.1f hysteresis %.1f sensor "),
                                         id + 1,
                                         zone_names[id],
-                                        (zone->Flags & WOB_REPORT_FLAGS_CONTROL_ENABLED) ? "ENABLED" : "DISABLED",
-                                        (zone->Flags & WOB_REPORT_FLAGS_OUTPUT_ACTIVE) ? "ACTIVE" : "INACTIVE",
+                                        zone->Config.Enabled ? "ENABLED" : "DISABLED",
+                                        zone->Active ? "ACTIVE" : "INACTIVE",
                                         (float)zone->Config.SetPoint / 10,
                                         (float)zone->Current / 10,
                                         (float)zone->Config.Hysteresis / 10);
@@ -84,6 +84,9 @@ void Zones_DumpZone(enum ZoneID id, ThermalZone *zone)
             break;
         case SENSOR_ANALOG2:
             VCP_Printf_P(PSTR("analog 2"));
+            break;
+        case SENSOR_ANALOG3:
+            VCP_Printf_P(PSTR("analog 3"));
             break;
         case SENSOR_BINARY:
             VCP_Printf_P(PSTR("binary (BUTTON_B)"));
@@ -108,10 +111,11 @@ ThermalZone *Zones_GetZone(enum ZoneID id)
 
 void Zones_ZoneCLI(ThermalZone *zone, int argc, const char * const *argv)
 {
+VCP_Printf_P(PSTR("Zones_ZoneCLI(zone=%p)\r\n"), zone);
     if(!strcasecmp(argv[0], "enable")) {
-        zone->Flags |= WOB_REPORT_FLAGS_CONTROL_ENABLED;
+        zone->Config.Enabled = true;
     } else if(!strcasecmp(argv[0], "disable")) {
-        zone->Flags &= ~WOB_REPORT_FLAGS_CONTROL_ENABLED;
+        zone->Config.Enabled = false;
     } else if(!strcasecmp(argv[0], "setpoint")) {
         if(argc > 1) {
             zone->Config.SetPoint = atof(argv[1]) * 10;
@@ -120,10 +124,23 @@ void Zones_ZoneCLI(ThermalZone *zone, int argc, const char * const *argv)
         if(argc > 1) {
             if(!strcasecmp(argv[1], "none")) {
                 zone->Config.SensorType = SENSOR_NONE;
-            } else if(!strcasecmp(argv[1], "analog1")) {
-                zone->Config.SensorType = SENSOR_ANALOG1;
-            } else if(!strcasecmp(argv[1], "analog2")) {
-                zone->Config.SensorType = SENSOR_ANALOG2;
+            } else if(!strcasecmp(argv[1], "analog")) {
+            
+                if(argc > 2) {
+                    switch(atoi(argv[2])) {
+                        case 1:
+                            zone->Config.SensorType = SENSOR_ANALOG1;
+                            break;
+                        case 2:
+                            zone->Config.SensorType = SENSOR_ANALOG2;
+                            break;
+                        case 3:
+                            zone->Config.SensorType = SENSOR_ANALOG2;
+                            break;
+                        default:
+                            ;
+                    }
+                }
             } else if(!strcasecmp(argv[1], "binary")) {
                 zone->Config.SensorType = SENSOR_BINARY;
             } else if(!strcasecmp(argv[1], "rfrx")) {

@@ -31,7 +31,17 @@
 
 #define RX_SAMPLES 400
 
-static uint16_t rx_buffer[RX_SAMPLES];
+typedef enum {
+  S_UNDEF,
+  S_SYNC,
+  S_LONG,
+  S_SHORT,
+  S_END,
+  S_VLP,
+} sample_t;
+
+
+static sample_t rx_buffer[RX_SAMPLES];
 static uint16_t rx_current;
 
 static uint8_t timer1_comp;
@@ -127,9 +137,23 @@ ISR (TIMER1_CAPT_vect)
   
   if(TCCR1B & TIMER1_CAPTURE_RISING_EDGE) {
     // look for sync.
-    if( ((rx_current == 0) && (len > 3500) && (len < 4500)) // sync
+    sample_t sample = S_UNDEF;
+
+    if(len > 5000) {
+       sample = S_END;
+    } else if((len > 3500) && (len < 4500)) {
+       sample = S_SYNC;
+    } else if((len > 800) && (len < 1100)) {
+       sample = S_SHORT;
+    } else if((len > 1800) && (len < 2000)) {
+       sample = S_LONG;
+    }
+
+
+    if( ((rx_current == 0) && (sample == S_SYNC)) // sync
         || ((rx_current > 0) && (rx_current < RX_SAMPLES)) ) {
-        rx_buffer[rx_current] = len;
+
+        rx_buffer[rx_current] = sample;
         ++rx_current;
     }
   }
@@ -229,7 +253,7 @@ static uint8_t RfRx_decode(RfRx_Callback cb)
   memset(&hits, 0, sizeof(hits));
   
   for(int i = 0; i < rx_current; ++i) {
-    uint16_t len = rx_buffer[i];
+    sample_t sample = rx_buffer[i];
   
     if(bit == 36) {
       
@@ -253,7 +277,7 @@ static uint8_t RfRx_decode(RfRx_Callback cb)
       ++decoded;
     }
     
-    if((len > 3500) && (len < 4500)) { // sync
+    if(sample == S_SYNC) { // sync
       bit = 0;
       memset(&packet, 0, sizeof(packet));
       continue;
@@ -263,13 +287,13 @@ static uint8_t RfRx_decode(RfRx_Callback cb)
       continue;
     }
     
-    if( (len > 800) && (len < 1100) ) {
+    if(sample == S_SHORT) {
       // 1
       ++bit;
       continue;
     }
     
-    if( (len > 1800) && (len < 2000) ) {
+    if(sample == S_LONG) {
 
       packet.data[ bit / 8 ] |= 1 << (7 - (bit % 8));
 

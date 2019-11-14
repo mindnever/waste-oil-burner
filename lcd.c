@@ -4,25 +4,13 @@
 #include <stdio.h>
 
 #include "lcd.h"
-#include "twi.h"
 
 #include <stdbool.h>
 
 #define LCD_COLS 16
 #define LCD_ROWS 2
 
-#define LCD_I2C_ADDR (0x27 << 1)
-
-#define LCD_RS _BV(0)
-#define LCD_RW _BV(1)
-#define LCD_EN _BV(2)
-#define LCD_BT _BV(3)
-
-#define LCD_D4 _BV(4)
-#define LCD_D5 _BV(5)
-#define LCD_D6 _BV(6)
-#define LCD_D7 _BV(7)
-
+bool lcd_bus_error;
 
 /*!
  @defined 
@@ -73,51 +61,29 @@
 #define LCD_1LINE               0x00
 #define LCD_5x10DOTS            0x04
 #define LCD_5x8DOTS             0x00
-
-
-static bool backlight;
-
-bool lcd_bus_error;
-
-static void lcd_write(uint8_t value, bool is_data)
-{
-  value <<= 4;
-
-  if(is_data) {
-    value |= LCD_RS;
-  }
-  if(backlight) {
-    value |= LCD_BT;
-  }
-  
-  if(twi_write_bytes(LCD_I2C_ADDR, value, 0, 0) < 0) {
-    lcd_bus_error = true;
-  }
-  if(twi_write_bytes(LCD_I2C_ADDR, value | LCD_EN, 0, 0) < 0) {
-    lcd_bus_error = true;
-  }
-  if(twi_write_bytes(LCD_I2C_ADDR, value, 0, 0) < 0) {
-    lcd_bus_error = true;
-  }
-}
+#define LCD_VFLIP		0x01
+#define LCD_HFLIP		0x02
 
 static void lcd_command(uint8_t cmd)
 {
   lcd_write(cmd >> 4, false);
   lcd_write(cmd & 0x0f, false);
+
+#ifdef LCD_COMMAND_DELAY_US
+  _delay_us(LCD_COMMAND_DELAY_US);
+#endif
 }
 
 static void lcd_data(uint8_t data)
 {
   lcd_write(data >> 4, true);
   lcd_write(data & 0x0f, true);
+#ifdef LCD_DATA_DELAY_US
+  _delay_us(LCD_DATA_DELAY_US);
+#endif
+
 }
 
-void lcd_backlight(bool on_off)
-{
-  backlight = on_off;
-  twi_write_bytes(LCD_I2C_ADDR, backlight ? LCD_BT : 0, 0, 0);
-}
 
 void lcd_puts(const char *str)
 {

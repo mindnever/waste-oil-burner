@@ -31,7 +31,7 @@ void Flame_Task(void)
     ThermalZone *water = Zones_GetZone( ZONE_ID_WATER );
     ThermalZone *oil = Zones_GetZone( ZONE_ID_OIL );
 
-    if( ! (water->Flags & WOB_REPORT_FLAGS_OUTPUT_ACTIVE ) ) {
+    if( ! water->Active ) {
 
         if(FlameData.state != state_fault) {
             FlameData.state = state_idle;
@@ -55,7 +55,7 @@ void Flame_Task(void)
             RELAY_OFF( RELAY_SPARK );
             
             // turn off oil heater
-            oil->Flags &= ~WOB_REPORT_FLAGS_CONTROL_ENABLED;            
+            oil->Config.Enabled = false;            
             break;
 
         case state_idle:
@@ -70,13 +70,13 @@ void Flame_Task(void)
             RELAY_OFF( RELAY_SPARK );
             
             // turn off oil heater
-            oil->Flags &= ~WOB_REPORT_FLAGS_CONTROL_ENABLED;
+            oil->Config.Enabled = false;
             break;
 
         case state_wait:
         case state_preheat: // waiting for oil to be *not* cold (hot oil trigger is for oil heating state machine)
-            
-            oil->Flags |= WOB_REPORT_FLAGS_CONTROL_ENABLED;
+
+            oil->Config.Enabled = true;            
             
             if( !Zones_IsCold( ZONE_ID_OIL ) ) {
                 RELAY_ON( RELAY_FAN );

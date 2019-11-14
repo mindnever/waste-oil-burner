@@ -21,6 +21,10 @@ AnalogSensorConfiguration ADC_Config = {
             .gain = DEFAULT_ANALOG_SENSOR_GAIN,
             .offset = DEFAULT_ANALOG_SENSOR_OFFSET,
         },
+        [ 2 ] = {
+            .gain = DEFAULT_ANALOG_SENSOR_GAIN,
+            .offset = DEFAULT_ANALOG_SENSOR_OFFSET,
+        },
     }
 };
 
@@ -34,17 +38,22 @@ void ADC_Init(void)
 {
 #ifdef SENSOR_A_PORT
     IO_DIR_IN( SENSOR_A );
-    IO_PIN_HIGH( SENSOR_A ); // pullup
+    IO_PIN_LOW( SENSOR_A );
 #endif
     
 #ifdef SENSOR_B_PORT
     IO_DIR_IN( SENSOR_B );
-    IO_PIN_HIGH( SENSOR_B ); // pullup
+    IO_PIN_LOW( SENSOR_B );
 #endif
     
 #ifdef SENSOR_C_PORT
     IO_DIR_IN( SENSOR_C );
-    IO_PIN_HIGH( SENSOR_C ); // pullup
+    IO_PIN_LOW( SENSOR_C );
+#endif
+
+#ifdef SENSOR_D_PORT
+    IO_DIR_IN( SENSOR_D );
+    IO_PIN_LOW( SENSOR_D );
 #endif
     
     // setup ADC, ADMUX input to ADC6, Vref = AVcc, start , 125khz clock
@@ -54,20 +63,23 @@ void ADC_Init(void)
     ADCSRA = _BV( ADEN ) | _BV( ADSC ) | _BV( ADPS0 ) | _BV( ADPS1 ) | _BV( ADPS2 ) | _BV( ADATE );
     
     DIDR0 =
-#ifdef SENSOR_A_PORT
+#ifdef SENSOR_A_DIDR0
     _BV( IO_DIDR0( SENSOR_A ) ) |
 #endif
-#ifdef SENSOR_B_PORT
+#ifdef SENSOR_B_DIDR0
     _BV( IO_DIDR0( SENSOR_B ) ) |
 #endif
-#ifdef SENSOR_C_PORT
+#ifdef SENSOR_C_DIDR0
     _BV( IO_DIDR0( SENSOR_C ) ) |
+#endif
+#ifdef SENSOR_D_DIDR0
+    _BV( IO_DIDR0( SENSOR_D ) ) |
 #endif
     0;
 
 }
 
-uint16_t raw_adc[3];
+uint16_t raw_adc[NUM_ANALOG_SENSORS + 1];
 
 void ADC_Task(void)
 {
@@ -88,12 +100,16 @@ void ADC_Task(void)
             break;
         case 2:
             Zones_SetCurrent(SENSOR_ANALOG2, 0, (ADC_Config.Calibration[1].gain * value + ADC_Config.Calibration[1].offset) * 10);
+            ADC_Mux( IO_ADCMUX( SENSOR_D ) ); // next
+            break;
+        case 3:
+            Zones_SetCurrent(SENSOR_ANALOG3, 0, (ADC_Config.Calibration[2].gain * value + ADC_Config.Calibration[2].offset) * 10);
             ADC_Mux( IO_ADCMUX( SENSOR_A ) ); // next
             break;
     }
 
     ++sensor;
-    if(sensor > 2) {
+    if(sensor > NUM_ANALOG_SENSORS) {
         sensor = 0;
     }
 }

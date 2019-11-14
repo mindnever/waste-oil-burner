@@ -7,6 +7,7 @@ typedef enum {
     SENSOR_ANALOG2,
     SENSOR_BINARY, /* button_b */
     SENSOR_RFRX,
+    SENSOR_ANALOG3,
 } sensor_type_t;
 
 typedef struct {
@@ -16,6 +17,7 @@ typedef struct {
     uint8_t  SensorType;
     uint16_t SensorID; /* for RFRX */
 
+    uint8_t  Enabled;
 } ThermalZoneConfiguration;
 
 /*
@@ -39,7 +41,7 @@ typedef struct {
 typedef struct {
 
     int16_t Current;
-    uint8_t Flags;
+    uint8_t Active;
 
     ThermalZoneConfiguration Config;
 

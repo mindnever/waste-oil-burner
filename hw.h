@@ -13,4 +13,9 @@
 # define HAVE_ENCODER
 #endif
 
+#if defined(LCD_DATA_PORT)
+# define LCD_COMMAND_DELAY_US 39
+# define LCD_DATA_DELAY_US 43
+#endif
+
 #endif /* _WOB_HW_H_ */
