@@ -10,7 +10,15 @@
 # DEFINES += -DBWCT_COMPAT 
 # DEFINES += -DDEBUG_LEVEL=1
 
-BOARD ?= PROMICRO
+#BOARD ?= PROMICRO
+
+ifeq ($(BOARD),)
+$(error BOARD must be set)
+endif
+
+
+BUILDDIR = build/$(BOARD)
+FW = $(BUILDDIR)/firmware
 
 TICK_MS = 10
 OBJECTS = main.o twi.o lcd.o rx.o led.o zones.o flame.o adc.o eeconfig.o microrl/src/microrl.o
@@ -64,10 +72,7 @@ COMPILE = avr-gcc -Wall -O2 -std=gnu99 -I. -mmcu=$(DEVICE) $(DEFINES) $(LUFA_CFL
 LINK = avr-gcc $(LUFA_LIBS)  -Wl,--gc-sections -Wl,--relax -mmcu=$(DEVICE) -Wl,-u,vfprintf -lprintf_flt -lm
 
 # symbolic targets:
-all:	firmware.hex
-
-.c.o:
-	$(COMPILE) -c $< -o $@
+all:	$(FW).hex
 
 .S.o:
 	$(COMPILE) -x assembler-with-cpp -c $< -o $@
@@ -100,38 +105,42 @@ fuse:
 
 
 clean:
-	rm -f firmware.lst firmware.obj firmware.cof firmware.list firmware.map firmware.eep.hex firmware.bin $(OBJECTS) firmware.s
+	rm -f $(FW).lst $(FW).obj $(FW).cof $(FW).list $(FW).map $(FW).eep.hex $(FW).bin $(FW).s $(addprefix $(BUILDDIR)/, $(OBJECTS))
 
 # file targets:
-firmware.bin:	$(OBJECTS)
-	$(LINK) -o firmware.bin $(OBJECTS)
+$(FW).bin:	$(addprefix $(BUILDDIR)/, $(OBJECTS))
+	$(LINK) -o $@ $(abspath $^)
 
-firmware.hex:	firmware.bin
-	rm -f firmware.hex firmware.eep.hex
-	avr-objcopy -j .text -j .data -O ihex firmware.bin firmware.hex
-	./checksize firmware.bin $(FLASH) $(RAM)
+$(FW).hex:	$(FW).bin
+	rm -f $(FW).hex $(FW).eep.hex
+	avr-objcopy -j .text -j .data -O ihex $(FW).bin $(FW).hex
+	./checksize $(FW).bin $(FLASH) $(RAM)
 
 size:
-	./checksize firmware.bin $(FLASH) $(RAM)
+	./checksize $(FW).bin $(FLASH) $(RAM)
 
 # do the checksize script as our last action to allow successful compilation
 # on Windows with WinAVR where the Unix commands will fail.
 
-avrdude: firmware.hex
-	$(AVRDUDE) -U flash:w:firmware.hex
+avrdude: $(FW).hex
+	$(AVRDUDE) -U flash:w:$(FW).hex
 
 avrdude-nodep:
-	avrdude -c usbasp -p atmega8 -U lfuse:w:0x9f:m -U hfuse:w:0xc9:m -U flash:w:firmware.hex
+	avrdude -c usbasp -p atmega8 -U lfuse:w:0x9f:m -U hfuse:w:0xc9:m -U flash:w:$(FW).hex
 
-flash: firmware.hex
+flash: $(FW).hex
 	$(DFU_PROGRAMMER) $(DEVICE) erase || true
-	$(DFU_PROGRAMMER) $(DEVICE) flash firmware.hex
+	$(DFU_PROGRAMMER) $(DEVICE) flash $(FW).hex
 
 launch:
 	$(DFU_PROGRAMMER) $(DEVICE) reset
 
-disasm:	firmware.bin
-	avr-objdump -d firmware.bin
+disasm:	$(FW).bin
+	avr-objdump -d $(FW).bin
 
 cpp:
 	$(COMPILE) -E main.c
+
+$(BUILDDIR)/%.o : %.c
+	@mkdir -p $(dir $@)
+	$(COMPILE) -c $(CFLAGS) $(CPPFLAGS) $< -o $@
