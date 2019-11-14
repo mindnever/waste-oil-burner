@@ -350,18 +350,14 @@ static void Init_ThermalZones(void)
 
 static void Update_ZoneFlags(void)
 {
-
-    if( ( (Zones_GetZone( ZONE_ID_EXT1 )->Active)
-        || (Zones_GetZone( ZONE_ID_EXT2 )->Active)
-        || (Zones_GetZone( ZONE_ID_EXT3 )->Active)
-        || (Zones_GetZone( ZONE_ID_EXT4 )->Active) ) ) {
-
-        Zones_GetZone( ZONE_ID_WATER )->Config.Enabled = true;
-
-    } else {
-
-        Zones_GetZone( ZONE_ID_WATER )->Config.Enabled = false;
-
+    ThermalZone *zone;
+    
+    Zones_GetZone( ZONE_ID_WATER )->Config.Enabled = false;
+    
+    for(enum ZoneID id = ZONE_ID_EXT1; id <= ZONE_ID_EXT4; ++id) {
+        if( ( zone = Zones_GetZone(id) ) ) {
+            Zones_GetZone( ZONE_ID_WATER )->Config.Enabled |= zone->Active;
+        }
     }
 }
 
@@ -370,7 +366,7 @@ static void Update_Outputs()
 #ifdef RELAY_HEATER_PORT
     if(Zones_GetZone(ZONE_ID_OIL)->Active) { RELAY_ON( RELAY_HEATER );    } else { RELAY_OFF( RELAY_HEATER );   }
 #endif
-    // ZONE_ID_WATER is internally connected only
+    // ZONE_ID_WATER is internally connected to burner fsm.
 #ifdef RELAY_ZONE_EXT1_PORT
     if(Zones_GetZone(ZONE_ID_EXT1)->Active) { RELAY_ON( RELAY_ZONE_EXT1) ; } else { RELAY_OFF( RELAY_ZONE_EXT1); }
 #endif
@@ -432,7 +428,7 @@ static void Button_Task()
     }
 
     if(IS_PRESSED(button_a)) {
-        Flame_Init();
+        Flame_Reset();
     }
 #endif
         
@@ -458,7 +454,7 @@ static void Button_Task()
     }
     
     if(IS_LONGPRESS(button_r)) {
-        Flame_Init();
+        Flame_Reset();
     }
 #endif
 }

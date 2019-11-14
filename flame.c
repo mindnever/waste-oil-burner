@@ -16,11 +16,25 @@
 #define FLAME_SENSOR_DELAY (3000/TICK_MS)
 
 
+
 static uint32_t timer = 0;
 
 struct FlameData FlameData;
+struct FlameConfiguration FlameConfiguration;
 
 void Flame_Init(void)
+{
+    Flame_Reset();
+    
+    FlameConfiguration.fan_time = 10000;
+    FlameConfiguration.air_time = 150;
+    FlameConfiguration.spark_time = 6000;
+    FlameConfiguration.detect_time = 4000;
+    FlameConfiguration.flame_time = 3000;
+    FlameConfiguration.retry_count = 3;
+}
+
+void Flame_Reset(void)
 {
     FlameData.state = state_idle;
     FlameData.ignition_count = 0;

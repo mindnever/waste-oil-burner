@@ -1,5 +1,6 @@
 #include <avr/io.h>
 #include <stdbool.h>
+#include "lcd.h"
 #include "twi.h"
 
 #define LCD_RS _BV(0)

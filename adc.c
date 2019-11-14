@@ -92,19 +92,27 @@ void ADC_Task(void)
     switch(sensor) {
         case 0:
             FlameData.sensor = value; // flame
+#ifdef SENSOR_B_ADCMUX
             ADC_Mux( IO_ADCMUX( SENSOR_B ) ); // next
+#endif
             break;
         case 1:
             Zones_SetCurrent(SENSOR_ANALOG1, 0, (ADC_Config.Calibration[0].gain * value + ADC_Config.Calibration[0].offset) * 10);
+#ifdef SENSOR_C_ADCMUX
             ADC_Mux( IO_ADCMUX( SENSOR_C ) ); // next
+#endif
             break;
         case 2:
             Zones_SetCurrent(SENSOR_ANALOG2, 0, (ADC_Config.Calibration[1].gain * value + ADC_Config.Calibration[1].offset) * 10);
+#ifdef SENSOR_D_ADCMUX
             ADC_Mux( IO_ADCMUX( SENSOR_D ) ); // next
+#endif
             break;
         case 3:
             Zones_SetCurrent(SENSOR_ANALOG3, 0, (ADC_Config.Calibration[2].gain * value + ADC_Config.Calibration[2].offset) * 10);
+#ifdef SENSOR_A_ADCMUX
             ADC_Mux( IO_ADCMUX( SENSOR_A ) ); // next
+#endif
             break;
     }
 

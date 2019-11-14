@@ -22,10 +22,20 @@ extern struct FlameData {
     uint32_t burning;
 } FlameData;
 
+extern struct FlameConfiguration {
+    uint16_t fan_time;
+    uint16_t air_time;
+    uint16_t spark_time;
+    uint16_t detect_time; // detect flame
+    uint16_t flame_time; // FLAME_SENSOR_DELAY
+    uint8_t retry_count;
+} FlameConfiguration;
+
 #define IS_BURNING() (FlameData.sensor < 61000)
 
 
 void Flame_Task(void);
 void Flame_Init(void);
+void Flame_Reset(void);
 
 #endif /* _WOB_FLAME_H_ */

@@ -4,18 +4,20 @@
 #include "zones.h"
 #include "adc.h"
 #include "vcp.h"
+#include "flame.h"
 
 #include <util/crc16.h>
 #include <avr/eeprom.h>
 #include <string.h>
 
-#define EELAYOUT_VERSION 3
+#define EELAYOUT_VERSION 4
 
 struct EELayout {
     uint8_t  Version;
     uint16_t CRC;
     ThermalZoneConfiguration TZ_Config[NUM_ZONES];
-    AnalogSensorCalibration ADC_Calibration[NUM_ANALOG_SENSORS];
+    AnalogSensorConfiguration ADC_Config;
+    struct FlameConfiguration F_Config;
 };
 
 static EEMEM struct EELayout eevars;
@@ -56,11 +58,9 @@ void EEConfig_Load(void)
         memcpy(&zone->Config, &buffer.TZ_Config[i], sizeof(buffer.TZ_Config[i]));
     }
     
-    for(uint8_t i = 0; i < NUM_ANALOG_SENSORS; ++i) {
-        memcpy(&ADC_Config.Calibration, &buffer.ADC_Calibration, sizeof(buffer.ADC_Calibration));
-    }
+    memcpy(&ADC_Config, &buffer.ADC_Config, sizeof(ADC_Config));
 
-
+    memcpy(&FlameConfiguration, &buffer.F_Config, sizeof(FlameConfiguration));
 }
 
 void EEConfig_Save(void)
@@ -75,9 +75,8 @@ void EEConfig_Save(void)
         memcpy(&buffer.TZ_Config[i], &zone->Config, sizeof(buffer.TZ_Config[i]));
     }
     
-    for(uint8_t i = 0; i < NUM_ANALOG_SENSORS; ++i) {
-        memcpy(&buffer.ADC_Calibration, &ADC_Config.Calibration, sizeof(buffer.ADC_Calibration));
-    }
+    memcpy(&buffer.ADC_Config, &ADC_Config, sizeof(buffer.ADC_Config));
+    memcpy(&buffer.F_Config, &FlameConfiguration, sizeof(buffer.F_Config));
     
     uint8_t *ptr = (uint8_t *) &buffer;
     uint16_t crc = 123;
