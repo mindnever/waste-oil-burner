@@ -210,35 +210,3 @@ void VCP_Puts(const char *str)
 {
   usb_write_sync(str, strlen(str));
 }
-
-void VCP_Printf(const char *fmt, ...)
-{
-  va_list ap;
-  char tmp[128];
-  
-  va_start(ap, fmt);
-  
-  vsnprintf(tmp, sizeof(tmp) - 1, fmt, ap);
-  
-  tmp[sizeof(tmp) - 1] = 0;
-  
-  usb_write_sync(tmp, strlen(tmp));
-
-  va_end(ap);
-}
-
-void VCP_Printf_P(const char *fmt, ...)
-{
-  va_list ap;
-  char tmp[128];
-  
-  va_start(ap, fmt);
-  
-  vsnprintf_P(tmp, sizeof(tmp) - 1, fmt, ap);
-  
-  tmp[sizeof(tmp) - 1] = 0;
-  
-  usb_write_sync(tmp, strlen(tmp));
-
-  va_end(ap);
-}

@@ -11,14 +11,8 @@ void VCP_Init(void);
 
 void VCP_Task(void);
 
-void VCP_Printf(const char *fmt, ...);
-void VCP_Printf_P(const char *fmt, ...);
-
 int VCP_Read(uint8_t *buf, int size);
 int VCP_Write(uint8_t *buf, int size);
-
-void VCP_Puts(const char *str);
-
 
 #ifdef USE_USB_VCP
 void EVENT_VCP_SetLineEncoding(CDC_LineEncoding_t *LineEncoding);

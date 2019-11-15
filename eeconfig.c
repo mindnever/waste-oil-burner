@@ -1,16 +1,18 @@
 #include <stdint.h>
+#include <stdio.h>
 
 #include "eeconfig.h"
 #include "zones.h"
 #include "adc.h"
 #include "vcp.h"
 #include "flame.h"
+#include "relay.h"
 
 #include <util/crc16.h>
 #include <avr/eeprom.h>
 #include <string.h>
 
-#define EELAYOUT_VERSION 4
+#define EELAYOUT_VERSION 5
 
 struct EELayout {
     uint8_t  Version;
@@ -18,6 +20,7 @@ struct EELayout {
     ThermalZoneConfiguration TZ_Config[NUM_ZONES];
     AnalogSensorConfiguration ADC_Config;
     struct FlameConfiguration F_Config;
+    RelayConfig R_Config;
 };
 
 static EEMEM struct EELayout eevars;
@@ -28,10 +31,10 @@ void EEConfig_Load(void)
     
     eeprom_read_block(&buffer, &eevars, sizeof(buffer));
 
-    VCP_Printf_P(PSTR("EEConfig_Load() layout version %u @%u\r\n"), buffer.Version, &eevars);
+    printf_P(PSTR("EEConfig_Load() layout version %u @%u\r\n"), buffer.Version, &eevars);
 
     if(buffer.Version != EELAYOUT_VERSION) {
-        VCP_Printf_P(PSTR("EEConfig_Load() layout version mismatch %u != %u\r\n"), buffer.Version, EELAYOUT_VERSION);
+        printf_P(PSTR("EEConfig_Load() layout version mismatch %u != %u\r\n"), buffer.Version, EELAYOUT_VERSION);
         return;
     }
     
@@ -46,11 +49,11 @@ void EEConfig_Load(void)
     }
     
     if(ecrc != crc) {
-        VCP_Printf_P(PSTR("EEConfig_Load() bad crc %u != %u\r\n"), ecrc, crc);
+        printf_P(PSTR("EEConfig_Load() bad crc %u != %u\r\n"), ecrc, crc);
         return;
     }
     
-    VCP_Printf_P(PSTR("EEConfig_Load() crc ok stored %u calculated %u\r\n"), ecrc, crc);
+    printf_P(PSTR("EEConfig_Load() crc ok stored %u calculated %u\r\n"), ecrc, crc);
     
     for(uint8_t i = 0; i < NUM_ZONES; ++i) {
         ThermalZone *zone = Zones_GetZone(i);
@@ -61,6 +64,7 @@ void EEConfig_Load(void)
     memcpy(&ADC_Config, &buffer.ADC_Config, sizeof(ADC_Config));
 
     memcpy(&FlameConfiguration, &buffer.F_Config, sizeof(FlameConfiguration));
+    memcpy(&RelayConfiguration, &buffer.R_Config, sizeof(RelayConfiguration));
 }
 
 void EEConfig_Save(void)
@@ -77,6 +81,7 @@ void EEConfig_Save(void)
     
     memcpy(&buffer.ADC_Config, &ADC_Config, sizeof(buffer.ADC_Config));
     memcpy(&buffer.F_Config, &FlameConfiguration, sizeof(buffer.F_Config));
+    memcpy(&buffer.R_Config, &RelayConfiguration, sizeof(buffer.R_Config));
     
     uint8_t *ptr = (uint8_t *) &buffer;
     uint16_t crc = 123;

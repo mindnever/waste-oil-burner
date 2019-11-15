@@ -333,11 +333,11 @@ static uint8_t RfRx_decode(RfRx_Callback cb)
 static void RfRx_dump()
 {
   
-    VCP_Printf("Got %d:", rx_current);
+    printf("Got %d:", rx_current);
     for(int i = 0; i < rx_current && i < 50; ++i) {
-      VCP_Printf("%u ", rx_buffer[i]);
+      printf("%u ", rx_buffer[i]);
     }
-    VCP_Printf("\r\n");
+    printf("\r\n");
 
 }
 #endif

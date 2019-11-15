@@ -73,48 +73,36 @@
 //#define LED_B_PORT B
 //#define LED_B_PIN 5
 
-// Kx - heater - D2 / PD2
-//#define RELAY_HEATER_PORT D
-//#define RELAY_HEATER_PIN  2
+// K1 - D2 / PD2
+#define K1_PORT D
+#define K1_PIN  2
+#define K1_INVERTED true
 
-// K2 - fan    - D3 / PD3
-#define RELAY_FAN_PORT D
-#define RELAY_FAN_PIN  3
+// K2 - D3 / PD3
+#define K2_PORT D
+#define K2_PIN  3
+#define K2_INVERTED true
 
-// K1 - air    - D2 / PD2
-#define RELAY_AIR_PORT D
-#define RELAY_AIR_PIN  2
+// K3 - D10 / PB2
+#define K3_PORT B
+#define K3_PIN  2
+#define K3_INVERTED true
 
-// K3 - spark  - D10 / PB2
-#define RELAY_SPARK_PORT B
-#define RELAY_SPARK_PIN  2
+// K4 - MOSI / PB2
+#define K4_PORT B
+#define K4_PIN 3
+#define K4_INVERTED true
 
-// K4 - ZONE1  - MOSI / PB2
-#define RELAY_ZONE_EXT1_PORT B
-#define RELAY_ZONE_EXT1_PIN 3
-
-// K6 - ZONE2  - MOSI / PB3
-//#define RELAY_ZONE_EXT2_PORT B
-//#define RELAY_ZONE_EXT2_PIN 3
-
-// K7 - ZONE3  - D7 / PD7
-//#define RELAY_ZONE_EXT3_PORT D
-//#define RELAY_ZONE_EXT3_PIN 7
-
-// K8 - ZONE4  - D9 / PB1
-//#define RELAY_ZONE_EXT4_PORT B
-//#define RELAY_ZONE_EXT4_PIN 1
-
-
-#define RELAY_ON(n) IO_PIN_LOW(n)
-#define RELAY_OFF(n) IO_PIN_HIGH(n)
-#define RELAY_STATE(n) (!IO_PIN_READ(n))
+#define DEFAULT_RELAY_CONFIG \
+    { \
+        [ RELAY_FAN ] = 2, \
+        [ RELAY_AIR ] = 1, \
+        [ RELAY_SPARK ] = 3, \
+        [ RELAY_ZONE_EXT1 ] = 4, \
+    }
 
 #define LED_ON(n) IO_PIN_LOW(n)
 #define LED_OFF(n) IO_PIN_HIGH(n)
 #define LED_TOGGLE(n) IO_PIN_TOGGLE(n)
-
-
-
 
 #endif /* __WOB_HW_PROMINI_H__ */

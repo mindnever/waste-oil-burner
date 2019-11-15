@@ -54,64 +54,45 @@
 #define LED_B_PORT D
 #define LED_B_PIN 5
 
-// Arduino 4, 5, 6, 7
-// PROMICRO:
-// PD4, PC6, PD7, PE6
-
-// K1 - heater - PD4
-// K2 - fan    - PC6
-// K3 - air    - PD7
-// K4 - spark  - PE6
-
-#if 0
-// K1, PD4, PROMICRO D4  (conflict with RF-RX)
-#define RELAY_HEATER_PORT D
-#define RELAY_HEATER_PIN  4
-
-// K2, PC6, PROMICRO D5
-#define RELAY_FAN_PORT C
-#define RELAY_FAN_PIN  6
-
-// K3, PD7, PROMICRO D6
-#define RELAY_AIR_PORT D
-#define RELAY_AIR_PIN  7
-
-// K4, PE6, PROMICRO D7
-#define RELAY_SPARK_PORT E
-#define RELAY_SPARK_PIN  6
-
-#else
-
 // K1, PC6, PROMICRO D5
-#define RELAY_HEATER_PORT C
-#define RELAY_HEATER_PIN  6
+#define K1_PORT C
+#define K1_PIN  6
+#define K1_INVERTED true
 
 // K2, PD7, PROMICRO D6
-#define RELAY_FAN_PORT D
-#define RELAY_FAN_PIN  7
+#define K2_PORT D
+#define K2_PIN  7
+#define K2_INVERTED true
 
 // K3, PB5, PROMICRO D9
-#define RELAY_AIR_PORT B
-#define RELAY_AIR_PIN  5
+#define K3_PORT B
+#define K3_PIN  5
+#define K3_INVERTED true
 
 // K4, PB4, PROMICRO D8
-#define RELAY_SPARK_PORT B
-#define RELAY_SPARK_PIN  4
+#define K4_PORT B
+#define K4_PIN  4
+#define K4_INVERTED true
 
 // K5, PE6, PROMICRO D7
-#define RELAY_ZONE_EXT1_PORT E
-#define RELAY_ZONE_EXT1_PIN 6
+#define K5_PORT E
+#define K5_PIN 6
+#define K5_INVERTED true
 
 // K6, PB6, PROMICRO D10
-#define RELAY_ZONE_EXT2_PORT B
-#define RELAY_ZONE_EXT2_PIN 6
+#define K6_PORT B
+#define K6_PIN 6
+#define K6_INVERTED true
 
-
-#endif
-
-#define RELAY_ON(n) IO_PIN_LOW(n)
-#define RELAY_OFF(n) IO_PIN_HIGH(n)
-#define RELAY_STATE(n) (!IO_PIN_READ(n))
+#define DEFAULT_RELAY_CONFIG \
+    { \
+        [ RELAY_HEATER ] = 1, \
+        [ RELAY_FAN ] = 2, \
+        [ RELAY_AIR ] = 3, \
+        [ RELAY_SPARK ] = 4, \
+        [ RELAY_ZONE_EXT1 ] = 5, \
+        [ RELAY_ZONE_EXT2 ] = 6, \
+    }
 
 #define LED_ON(n) IO_PIN_LOW(n)
 #define LED_OFF(n) IO_PIN_HIGH(n)

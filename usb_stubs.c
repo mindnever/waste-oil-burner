@@ -117,6 +117,13 @@ ISR (USART_RX_vect)
   fifo_write(&rx.fifo, &d, 1);
 }
 
+static int uart_putchar(char c, FILE *stream)
+{
+  loop_until_bit_is_set(ODDBG_USR, ODDBG_UDRE);
+  ODDBG_UDR = c;
+  return 0;
+}
+
 void  VCP_Init(void)
 {
     ODDBG_UCR |= _BV(ODDBG_TXEN) | _BV(ODDBG_RXEN) | _BV(ODDBG_RXCIE);
@@ -124,6 +131,12 @@ void  VCP_Init(void)
     
     IO_DIR_OUT( UART_TX );
     IO_DIR_IN( UART_RX );
+    
+    static FILE mystdout = FDEV_SETUP_STREAM(uart_putchar, 0, _FDEV_SETUP_WRITE);
+
+    stdout = &mystdout;
+    
+    printf_P(PSTR("VCP_Init test\r\n"));
 }
 
 static int uart_write_sync(const void *p, uint16_t len)
@@ -144,7 +157,7 @@ bool HID_Report(uint8_t reportId, const void *reportData, uint8_t reportSize)
     char tmp[2];
     static const char *hex = "0123456789abcdef";
     
-    VCP_Printf_P(PSTR("R:%u:"), reportId);
+    printf_P(PSTR("R:%u:"), reportId);
 
     for(const uint8_t *p = (const uint8_t *) reportData; reportSize > 0; --reportSize, ++p) {
       tmp[0] = hex[*p >> 4];
@@ -169,41 +182,4 @@ int VCP_Read(uint8_t *buf, int len)
   sei();
   
   return r;
-}
-
-void VCP_Puts(const char *str)
-{
-  uart_write_sync(str, strlen(str));
-}
-
-void VCP_Printf(const char *fmt, ...)
-{
-  va_list ap;
-  char tmp[128];
-  
-  va_start(ap, fmt);
-  
-  vsnprintf(tmp, sizeof(tmp) - 1, fmt, ap);
-  
-  tmp[sizeof(tmp) - 1] = 0;
-  
-  uart_write_sync(tmp, strlen(tmp));
-
-  va_end(ap);
-}
-
-void VCP_Printf_P(const char *fmt, ...)
-{
-  va_list ap;
-  char tmp[128];
-  
-  va_start(ap, fmt);
-  
-  vsnprintf_P(tmp, sizeof(tmp) - 1, fmt, ap);
-  
-  tmp[sizeof(tmp) - 1] = 0;
-  
-  uart_write_sync(tmp, strlen(tmp));
-
-  va_end(ap);
 }

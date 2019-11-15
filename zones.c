@@ -1,6 +1,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 
 #include "zones.h"
 #include "hid.h"
@@ -66,7 +67,7 @@ void Zones_Update(uint8_t master_enable)
 
 void Zones_DumpZone(enum ZoneID id, ThermalZone *zone)
 {
-    VCP_Printf_P(PSTR("zone %u (%s) %s %s setpoint %.1f current %.1f hysteresis %.1f sensor "),
+    printf_P(PSTR("zone %u (%s) %s %s setpoint %.1f current %.1f hysteresis %.1f sensor "),
                                         id + 1,
                                         zone_names[id],
                                         zone->Config.Enabled ? "ENABLED" : "DISABLED",
@@ -77,28 +78,28 @@ void Zones_DumpZone(enum ZoneID id, ThermalZone *zone)
 
     switch(zone->Config.SensorType) {
         case SENSOR_NONE:
-            VCP_Printf_P(PSTR("none"));
+            printf_P(PSTR("none"));
             break;
         case SENSOR_ANALOG1:
-            VCP_Printf_P(PSTR("analog 1"));
+            printf_P(PSTR("analog 1"));
             break;
         case SENSOR_ANALOG2:
-            VCP_Printf_P(PSTR("analog 2"));
+            printf_P(PSTR("analog 2"));
             break;
         case SENSOR_ANALOG3:
-            VCP_Printf_P(PSTR("analog 3"));
+            printf_P(PSTR("analog 3"));
             break;
         case SENSOR_BINARY:
-            VCP_Printf_P(PSTR("binary (BUTTON_B)"));
+            printf_P(PSTR("binary (BUTTON_B)"));
             break;
         case SENSOR_RFRX:
-            VCP_Printf_P(PSTR("RFRX sensor_id=%u"), zone->Config.SensorID);
+            printf_P(PSTR("RFRX sensor_id=%u"), zone->Config.SensorID);
             break;
         default:
-            VCP_Printf_P(PSTR("unknown"));
+            printf_P(PSTR("unknown"));
     }
     
-    VCP_Printf_P(PSTR("\r\n"));
+    printf_P(PSTR("\r\n"));
 }
 
 ThermalZone *Zones_GetZone(enum ZoneID id)
@@ -111,7 +112,6 @@ ThermalZone *Zones_GetZone(enum ZoneID id)
 
 void Zones_ZoneCLI(ThermalZone *zone, int argc, const char * const *argv)
 {
-VCP_Printf_P(PSTR("Zones_ZoneCLI(zone=%p)\r\n"), zone);
     if(!strcasecmp(argv[0], "enable")) {
         zone->Config.Enabled = true;
     } else if(!strcasecmp(argv[0], "disable")) {
@@ -149,7 +149,7 @@ VCP_Printf_P(PSTR("Zones_ZoneCLI(zone=%p)\r\n"), zone);
                     zone->Config.SensorID = atoi(argv[2]);
                 }
             } else {
-                VCP_Printf_P(PSTR("unknown zone sensor type '%s'\r\n"), argv[1]);
+                printf_P(PSTR("unknown zone sensor type '%s'\r\n"), argv[1]);
             }
         }
     } else if(!strcasecmp(argv[0], "hysteresis")) {
@@ -157,7 +157,7 @@ VCP_Printf_P(PSTR("Zones_ZoneCLI(zone=%p)\r\n"), zone);
             zone->Config.Hysteresis = atof(argv[1]) * 10;
         }
     } else {
-        VCP_Printf_P(PSTR("unknown zone command '%s'\r\n"), argv[0]);
+        printf_P(PSTR("unknown zone command '%s'\r\n"), argv[0]);
     }
 }
 

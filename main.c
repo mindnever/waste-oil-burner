@@ -6,7 +6,6 @@
 #include <string.h>
 
 #include "boot.h"
-
 #include "hw.h"
 
 #if defined(USE_USB_VCP) || defined(USE_USB_HID)
@@ -28,10 +27,12 @@
 #include "flame.h"
 #include "adc.h"
 #include "eeconfig.h"
+#include "relay.h"
 
 #include "microrl/src/microrl.h"
 
 #include <stdlib.h>
+#include <stdio.h>
 
 #ifndef cpu_to_le16
 # define cpu_to_le16(x)           (x)
@@ -63,7 +64,8 @@
 
 #define FORCE_HID_REPORTS (1000/TICK_MS)
 
-#define MASTER_ENABLE IS_PRESSED(button_b)
+//#define MASTER_ENABLE IS_PRESSED(button_b)
+#define MASTER_ENABLE true
 
 
 static const char *state_name[] = {
@@ -127,26 +129,30 @@ static void CLI_Dfu()
 
 static void CLI_Info()
 {
-    VCP_Printf_P(PSTR("CPU Usage: %.1f%%\r\n"), 100.0 - (((float)sys_busy_ticks / (float)sys_idle_ticks) * 100));
+    printf_P(PSTR("CPU Usage: %.1f%%\r\n"), 100.0 - (((float)sys_busy_ticks / (float)sys_idle_ticks) * 100));
     uint16_t bootloader_signature = pgm_read_word_near( BOOTLOADER_MAGIC_SIGNATURE_START );
-    VCP_Printf_P(PSTR("bootloader_signature: %02x\r\n"), bootloader_signature);
+    printf_P(PSTR("bootloader_signature: %02x\r\n"), bootloader_signature);
     if(bootloader_signature != BOOTLOADER_MAGIC_SIGNATURE) {
-        VCP_Printf_P(PSTR("Unknown bootloader type\r\n"));
+        printf_P(PSTR("Unknown bootloader type\r\n"));
         return;
     }
     uint16_t bootloader_class = pgm_read_word_near( BOOTLOADER_CLASS_SIGNATURE_START );
-    VCP_Printf_P(PSTR("bootloader_class: %02x\r\n"), bootloader_class);
-    VCP_Printf_P(PSTR("lock: %u\r\n"), BootloaderAPI_ReadLock());
+    printf_P(PSTR("bootloader_class: %02x\r\n"), bootloader_class);
+    printf_P(PSTR("lock: %u\r\n"), BootloaderAPI_ReadLock());
 }
 
+static void CLI_Puts(const char *str)
+{
+    fputs(str, stdout);
+}
 
 static int CLI_Execute(int argc, const char * const *argv)
 {
-    VCP_Printf_P(PSTR("\r\n"));
+    printf_P(PSTR("\r\n"));
 
     if(!strcasecmp(argv[0], "monitor")) {
         monitor_mode = 1;
-        VCP_Printf_P(PSTR("Monitor mode on\r\n"));
+        printf_P(PSTR("Monitor mode on\r\n"));
     } else if(!strcasecmp(argv[0], "hid")) {
         if(argc > 1) {
             if(!strcasecmp(argv[1], "on")) {
@@ -155,11 +161,11 @@ static int CLI_Execute(int argc, const char * const *argv)
                 hid_enabled = 0;
             }
         }
-        VCP_Printf_P(PSTR("HID reporting is %s\r\n"), hid_enabled ? "on" : "off");
+        printf_P(PSTR("HID reporting is %s\r\n"), hid_enabled ? "on" : "off");
     } else if(!strcasecmp(argv[0], "eeprom") && (argc > 1) && !strcasecmp(argv[1], "format")) {
         EEConfig_Format();
     } else if(!strcasecmp(argv[0], "uptime")) {
-        VCP_Printf_P(PSTR("%lu\r\n"), sys_millis / 1000);
+        printf_P(PSTR("%lu\r\n"), sys_millis / 1000);
     } else if(!strcasecmp(argv[0], "info")) {
         CLI_Info();
     } else if(!strcasecmp(argv[0], "dfu")) {
@@ -169,7 +175,7 @@ static int CLI_Execute(int argc, const char * const *argv)
             if(!strcasecmp(argv[1], "print")) {
                 // print analog calibration
                 for(unsigned index = 0; index < NUM_ANALOG_SENSORS; ++index) {
-                    VCP_Printf_P(PSTR("analog %u gain %f offset %f\r\n"), index + 1, ADC_Config.Calibration[index].gain, ADC_Config.Calibration[index].offset);
+                    printf_P(PSTR("analog %u gain %f offset %f\r\n"), index + 1, ADC_Config.Calibration[index].gain, ADC_Config.Calibration[index].offset);
                 }
             } else {
                 if(argc > 3) {
@@ -182,13 +188,13 @@ static int CLI_Execute(int argc, const char * const *argv)
                         } else if(!strcasecmp(argv[2], "offset")) {
                             ADC_Config.Calibration[index].offset = atof(argv[3]);
                         } else {
-                            VCP_Printf_P(PSTR("Unknown analog sensor parameter '%s'\r\n"), argv[2]);
+                            printf_P(PSTR("Unknown analog sensor parameter '%s'\r\n"), argv[2]);
                         }
                         
                         EEConfig_Save();
                         
                     } else {
-                        VCP_Printf_P(PSTR("Sensors 1, 2 & 3 are supported only\r\n"));
+                        printf_P(PSTR("Sensors 1, 2 & 3 are supported only\r\n"));
                     }
                     
                 } else {
@@ -196,6 +202,10 @@ static int CLI_Execute(int argc, const char * const *argv)
                 }
             }
         }
+    } else if(!strcasecmp(argv[0], "flame")) {
+        Flame_CLI(argc - 1, argv + 1);
+    } else if(!strcasecmp(argv[0], "relay")) {
+        Relay_CLI(argc - 1, argv + 1);
     } else if(!strcasecmp(argv[0], "zone")) {
         if(argc > 1) {
             if(!strcasecmp(argv[1], "print")) {
@@ -210,17 +220,17 @@ static int CLI_Execute(int argc, const char * const *argv)
                         EEConfig_Save();
                         
                     } else {
-                        VCP_Printf_P(PSTR("zone %s does not exist\r\n"), argv[1]);
+                        printf_P(PSTR("zone %s does not exist\r\n"), argv[1]);
                     }
                 } else {
-                    VCP_Printf_P(PSTR("zone #nr and subcommand required\r\n"));
+                    printf_P(PSTR("zone #nr and subcommand required\r\n"));
                 }
             }
         } else {
-            VCP_Printf_P(PSTR("%s op required: [ print | enable | disable ]\r\n"), argv[0]);
+            printf_P(PSTR("%s op required: [ print | enable | disable ]\r\n"), argv[0]);
         }
     } else {
-        VCP_Printf_P(PSTR("unknown command '%s'\r\n"), argv[0]);
+        printf_P(PSTR("unknown command '%s'\r\n"), argv[0]);
     }
     return 0;
 }
@@ -240,7 +250,7 @@ static void CLI_Task()
     if (r > 0) {
         if(monitor_mode) {
             monitor_mode = false;
-            VCP_Printf_P(PSTR("Monitor mode off\r\n"));
+            printf_P(PSTR("Monitor mode off\r\n"));
         }
         cmdBuf[r] = 0;
         for(uint16_t i = 0; i < r; ++i) {
@@ -259,13 +269,6 @@ static void IO_Init()
     IO_DIR_OUT( LED_B );
 #endif
 
-#ifdef RELAY_HEATER_PORT
-    IO_DIR_OUT( RELAY_HEATER );
-#endif
-    IO_DIR_OUT( RELAY_FAN );
-    IO_DIR_OUT( RELAY_AIR );
-    IO_DIR_OUT( RELAY_SPARK );
-    
 #ifdef BUTTON_A_PORT
     IO_DIR_IN( BUTTON_A );
     IO_PIN_HIGH( BUTTON_A ); // pullup
@@ -274,24 +277,6 @@ static void IO_Init()
     IO_DIR_IN( BUTTON_B );
     IO_PIN_HIGH( BUTTON_B ); // pullup
 #endif
-
-#ifdef RELAY_ZONE_EXT1_PORT
-    RELAY_OFF( RELAY_ZONE_EXT1 );
-    IO_DIR_OUT( RELAY_ZONE_EXT1 );
-#endif
-#ifdef RELAY_ZONE_EXT2_PORT
-    RELAY_OFF( RELAY_ZONE_EXT2 );
-    IO_DIR_OUT( RELAY_ZONE_EXT2 );
-#endif
-#ifdef RELAY_ZONE_EXT3_PORT
-    RELAY_OFF( RELAY_ZONE_EXT3 );
-    IO_DIR_OUT( RELAY_ZONE_EXT3 );
-#endif
-#ifdef RELAY_ZONE_EXT4_PORT
-    RELAY_OFF( RELAY_ZONE_EXT4 );
-    IO_DIR_OUT( RELAY_ZONE_EXT4 );
-#endif
-
 
 #ifdef HAVE_ENCODER
     IO_DIR_IN( BUTTON_R );
@@ -363,22 +348,12 @@ static void Update_ZoneFlags(void)
 
 static void Update_Outputs()
 {
-#ifdef RELAY_HEATER_PORT
-    if(Zones_GetZone(ZONE_ID_OIL)->Active) { RELAY_ON( RELAY_HEATER );    } else { RELAY_OFF( RELAY_HEATER );   }
-#endif
+    if(Zones_GetZone(ZONE_ID_OIL)->Active) { Relay_On( RELAY_HEATER );    } else { Relay_Off( RELAY_HEATER );   }
     // ZONE_ID_WATER is internally connected to burner fsm.
-#ifdef RELAY_ZONE_EXT1_PORT
-    if(Zones_GetZone(ZONE_ID_EXT1)->Active) { RELAY_ON( RELAY_ZONE_EXT1) ; } else { RELAY_OFF( RELAY_ZONE_EXT1); }
-#endif
-#ifdef RELAY_ZONE_EXT2_PORT
-    if(Zones_GetZone(ZONE_ID_EXT2)->Active) { RELAY_ON( RELAY_ZONE_EXT2) ; } else { RELAY_OFF( RELAY_ZONE_EXT2); }
-#endif
-#ifdef RELAY_ZONE_EXT3_PORT
-    if(Zones_GetZone(ZONE_ID_EXT3)->Active) { RELAY_ON( RELAY_ZONE_EXT3) ; } else { RELAY_OFF( RELAY_ZONE_EXT3); }
-#endif
-#ifdef RELAY_ZONE_EXT4_PORT
-    if(Zones_GetZone(ZONE_ID_EXT4)->Active) { RELAY_ON( RELAY_ZONE_EXT4) ; } else { RELAY_OFF( RELAY_ZONE_EXT4); }
-#endif
+    if(Zones_GetZone(ZONE_ID_EXT1)->Active) { Relay_On( RELAY_ZONE_EXT1) ; } else { Relay_Off( RELAY_ZONE_EXT1); }
+    if(Zones_GetZone(ZONE_ID_EXT2)->Active) { Relay_On( RELAY_ZONE_EXT2) ; } else { Relay_Off( RELAY_ZONE_EXT2); }
+    if(Zones_GetZone(ZONE_ID_EXT3)->Active) { Relay_On( RELAY_ZONE_EXT3) ; } else { Relay_Off( RELAY_ZONE_EXT3); }
+    if(Zones_GetZone(ZONE_ID_EXT4)->Active) { Relay_On( RELAY_ZONE_EXT4) ; } else { Relay_Off( RELAY_ZONE_EXT4); }
 }
 
 
@@ -617,7 +592,7 @@ static void UI_Task()
         ThermalZone *zone = Zones_GetZone(zi[current_zone]);
         
         if(monitor_mode) { // TODO: output JSON for MQTT
-            VCP_Printf_P(PSTR("State:%d [%s], s_A:%u, s_B:%u, s_C:%u, s_D:%u, t_Oil:%.1f, t_%s:%.1f, Flame:%d IgnCount:%d\r\n"),
+            printf_P(PSTR("State:%d [%s], s_A:%u, s_B:%u, s_C:%u, s_D:%u, t_Oil:%.1f, t_%s:%.1f, Flame:%d IgnCount:%d\r\n"),
                                 FlameData.state, state_name[FlameData.state],
                                 FlameData.sensor,
                                 raw_adc[1],
@@ -677,22 +652,16 @@ int main(void)
 
     VCP_Init();
 
-    VCP_Printf_P(PSTR("Booting\r\n"));
+    printf_P(PSTR("Booting\r\n"));
 
     IO_Init();
+    Relay_Init();
     
     Init_ThermalZones();
     
-    microrl_init(&mrl, VCP_Puts);
+    microrl_init(&mrl, CLI_Puts);
     microrl_set_execute_callback(&mrl, CLI_Execute);
     microrl_set_complete_callback(&mrl, CLI_GetCompletion);
-    
-#ifdef RELAY_HEATER_PORT
-    RELAY_OFF( RELAY_HEATER );
-#endif
-    RELAY_OFF( RELAY_FAN );
-    RELAY_OFF( RELAY_AIR );
-    RELAY_OFF( RELAY_SPARK );
     
 #ifdef LED_A_PORT
     LED_ON( LED_A );
@@ -702,8 +671,6 @@ int main(void)
 #endif
     
     ADC_Init();
-
-    EEConfig_Load();
 
 #ifdef LCD_DATA_PORT
     lcd_gpio_init();
@@ -715,6 +682,8 @@ int main(void)
     RfRx_Init();
     
     Flame_Init();
+
+    EEConfig_Load();
 
     sei();
     
@@ -801,18 +770,16 @@ void do_hid_report_03()
     }
     
     report.Outputs = 0;
-#ifdef RELAY_HEATER_PORT
-    if(RELAY_STATE(RELAY_HEATER)) {
+    if(Relay_State(RELAY_HEATER)) {
         report.Outputs |= WOB_REPORT_OUTPUT_HEATER;
     }
-#endif
-    if(RELAY_STATE(RELAY_AIR)) {
+    if(Relay_State(RELAY_AIR)) {
         report.Outputs |= WOB_REPORT_OUTPUT_AIR;
     }
-    if(RELAY_STATE(RELAY_FAN)) {
+    if(Relay_State(RELAY_FAN)) {
         report.Outputs |= WOB_REPORT_OUTPUT_FAN;
     }
-    if(RELAY_STATE(RELAY_SPARK)) {
+    if(Relay_State(RELAY_SPARK)) {
         report.Outputs |= WOB_REPORT_OUTPUT_SPARK;
     }
     
@@ -886,7 +853,7 @@ void on_rfrx_sensor_data(struct RfRx_SensorData *data)
     }
 
     if(monitor_mode) {
-        VCP_Printf_P(PSTR("{\"signal\":\"%u/%u\",\"batt\":%u,\"sensor_id\":%u,\"temperature\":%d.%u,\"t_%u\":\"%d.%u\",\"humidity\": %u, \"raw\": \"%s\"}\r\n"), data->_matching, data->_samples, data->battery, sensor_id , t_int, t_frac,  sensor_id, t_int, t_frac, data->humidity, raw);
+        printf_P(PSTR("{\"signal\":\"%u/%u\",\"batt\":%u,\"sensor_id\":%u,\"temperature\":%d.%u,\"t_%u\":\"%d.%u\",\"humidity\": %u, \"raw\": \"%s\"}\r\n"), data->_matching, data->_samples, data->battery, sensor_id , t_int, t_frac,  sensor_id, t_int, t_frac, data->humidity, raw);
     }
 
     Zones_SetCurrent(SENSOR_RFRX, report.SensorGUID, report.Temperature);

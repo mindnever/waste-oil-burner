@@ -21,7 +21,7 @@ BUILDDIR = build/$(BOARD)
 FW = $(BUILDDIR)/firmware
 
 TICK_MS = 10
-OBJECTS = main.o twi.o lcd.o rx.o led.o zones.o flame.o adc.o eeconfig.o microrl/src/microrl.o
+OBJECTS = main.o twi.o lcd.o rx.o led.o zones.o flame.o adc.o eeconfig.o relay.o microrl/src/microrl.o
 
 ifeq ($(BOARD),PROMICRO)
 
@@ -58,9 +58,9 @@ DEVICE=atmega328p
 FLASH=28672
 RAM=2048
 F_CPU = 16000000
-AVRDUDE = avrdude -v -c arduino -p $(DEVICE) -P/dev/cu.wchusbserialfa2330 -b115200
+AVRDUDE = avrdude -v -c arduino -p $(DEVICE) -P/dev/cu.wchusbserial3a20 -b115200
 
-OBJECTS += usb_stubs.o
+OBJECTS += usb_stubs.o lcd_gpio.o
 
 endif
 endif
@@ -105,7 +105,7 @@ fuse:
 
 
 clean:
-	rm -f $(FW).lst $(FW).obj $(FW).cof $(FW).list $(FW).map $(FW).eep.hex $(FW).bin $(FW).s $(addprefix $(BUILDDIR)/, $(OBJECTS))
+	rm -rf $(BUILDDIR)
 
 # file targets:
 $(FW).bin:	$(addprefix $(BUILDDIR)/, $(OBJECTS))

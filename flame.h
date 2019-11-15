@@ -28,14 +28,16 @@ extern struct FlameConfiguration {
     uint16_t spark_time;
     uint16_t detect_time; // detect flame
     uint16_t flame_time; // FLAME_SENSOR_DELAY
+    uint16_t flame_trig; // flame trigger (def 61000)
     uint8_t retry_count;
 } FlameConfiguration;
 
-#define IS_BURNING() (FlameData.sensor < 61000)
+#define IS_BURNING() (FlameData.sensor < FlameConfiguration.flame_trig)
 
 
 void Flame_Task(void);
 void Flame_Init(void);
 void Flame_Reset(void);
+void Flame_CLI(int argc, const char * const *argv);
 
 #endif /* _WOB_FLAME_H_ */

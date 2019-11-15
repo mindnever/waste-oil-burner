@@ -2,6 +2,7 @@
 #define __WOB_HW_UNO_H__
 
 #include "io.h"
+#include "relay.h"
 
 // UART
 #define UART_RX_PORT D
@@ -18,6 +19,17 @@
 // LCD
 // PD0 (D3) - SCL
 // PD1 (D2) - SDA
+
+#define LCD_RS_PORT D
+#define LCD_RS_PIN  2
+
+#define LCD_E_PORT D
+#define LCD_E_PIN 3
+
+#define LCD_DATA_PORT  PORTD
+#define LCD_DATA_DIR   DDRD
+#define LCD_DATA_SHIFT 4
+
 
 // flame sensor (PC3, A3, 10kΩ resistor from vcc to sensor, sensor to ground)
 #define SENSOR_A_PORT C
@@ -38,12 +50,12 @@
 #define SENSOR_C_DIDR0 0
 
 // reset button (PC1, A1)
-#define BUTTON_A_PORT C
-#define BUTTON_A_PIN 1
+//#define BUTTON_A_PORT C
+//#define BUTTON_A_PIN 1
 
-// external thermostat trigger (PB4, MISO)
-#define BUTTON_B_PORT B
-#define BUTTON_B_PIN 4
+// external thermostat trigger (PC1)
+#define BUTTON_B_PORT C
+#define BUTTON_B_PIN 1
 
 
 //#define LED_A_PORT B
@@ -52,42 +64,34 @@
 #define LED_B_PORT B
 #define LED_B_PIN 5
 
-// K1 - heater - D2 / PD2
-#define RELAY_HEATER_PORT D
-#define RELAY_HEATER_PIN  2
+// K1 - D10 - PB2
+#define K1_PORT B
+#define K1_PIN  2
+#define K1_INVERTED true
 
-// K2 - fan    - D3 / PD3
-#define RELAY_FAN_PORT D
-#define RELAY_FAN_PIN  3
+// K2 - D11 / PB3
+#define K2_PORT B
+#define K2_PIN  3
+#define K2_INVERTED true
 
-// K3 - air    - D4 / PD4
-#define RELAY_AIR_PORT D
-#define RELAY_AIR_PIN  4
+// K3 - D12 / PB4
+#define K3_PORT B
+#define K3_PIN  4
+#define K3_INVERTED true
 
-// K4 - spark  - D5 / PD5
-#define RELAY_SPARK_PORT D
-#define RELAY_SPARK_PIN  5
-
-// K5 - ZONE1  - D6 / PD6
-#define RELAY_ZONE_EXT1_PORT D
-#define RELAY_ZONE_EXT1_PIN 6
-
-// K6 - ZONE2  - MOSI / PB3
-#define RELAY_ZONE_EXT2_PORT B
-#define RELAY_ZONE_EXT2_PIN 3
-
-// K7 - ZONE3  - D7 / PD7
-#define RELAY_ZONE_EXT3_PORT D
-#define RELAY_ZONE_EXT3_PIN 7
-
-// K8 - ZONE4  - D9 / PB1
-#define RELAY_ZONE_EXT4_PORT B
-#define RELAY_ZONE_EXT4_PIN 1
+// K4 - D9 / PB1
+#define K4_PORT B
+#define K4_PIN  1
+#define K4_INVERTED true
 
 
-#define RELAY_ON(n) IO_PIN_LOW(n)
-#define RELAY_OFF(n) IO_PIN_HIGH(n)
-#define RELAY_STATE(n) (!IO_PIN_READ(n))
+#define DEFAULT_RELAY_CONFIG \
+    { \
+        [ RELAY_ZONE_EXT1 ] = 1, \
+        [ RELAY_ZONE_EXT2 ] = 2, \
+        [ RELAY_ZONE_EXT3 ] = 3, \
+        [ RELAY_ZONE_EXT4 ] = 4, \
+    }
 
 #define LED_ON(n) IO_PIN_LOW(n)
 #define LED_OFF(n) IO_PIN_HIGH(n)
