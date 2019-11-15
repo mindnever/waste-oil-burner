@@ -34,8 +34,8 @@ void Flame_Init(void)
     
     FlameConfiguration.fan_time = 10000;
     FlameConfiguration.air_time = 150;
-    FlameConfiguration.spark_time = 6000;
-    FlameConfiguration.detect_time = 4000;
+    FlameConfiguration.spark_time = 1000;
+    FlameConfiguration.detect_time = 5000;
     FlameConfiguration.flame_time = 3000;
     FlameConfiguration.retry_count = 3;
     FlameConfiguration.flame_trig = 61000;
@@ -127,7 +127,6 @@ void Flame_Task(void)
         case state_spark:
             if( ++timer > TIMEOUT_SPARK )
             {
-                Relay_Off( RELAY_SPARK );
                 FlameData.state = state_detect_flame;
                 led_a = blink_off;
                 led_b = blink_fast;
@@ -136,14 +135,15 @@ void Flame_Task(void)
             break;
         case state_detect_flame:
             if( ++timer > TIMEOUT_FLAME ) {
+                Relay_Off( RELAY_SPARK );
                 if(FlameData.ignition_count > IGNITION_RETRY) {
                     FlameData.state = state_fault;
                 } else {
                     FlameData.state = state_idle;
                 }
                 timer = 0;
-            }
-            else if( IS_BURNING() ) {
+            } else if( IS_BURNING() ) {
+                Relay_Off( RELAY_SPARK );
                 led_a = blink_off;
                 led_b = blink_slow;
                 
