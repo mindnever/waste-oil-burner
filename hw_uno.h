@@ -16,10 +16,19 @@
 #define RX_DATA_PORT B
 #define RX_DATA_PIN  0
 
-// LCD
-// PD0 (D3) - SCL
-// PD1 (D2) - SDA
+// Rotary encoder
+// rotary encoder button
+#define BUTTON_R_PORT B
+#define BUTTON_R_PIN 5
 
+// rotary encoder A & B
+#define ENCODER_A_PORT C
+#define ENCODER_A_PIN 4
+#define ENCODER_B_PORT C
+#define ENCODER_B_PIN 5
+
+
+// LCD
 #define LCD_RS_PORT D
 #define LCD_RS_PIN  2
 
@@ -61,8 +70,8 @@
 //#define LED_A_PORT B
 //#define LED_A_PIN 5
 
-#define LED_B_PORT B
-#define LED_B_PIN 5
+//#define LED_B_PORT B
+//#define LED_B_PIN 5
 
 // K1 - D10 - PB2
 #define K1_PORT B
