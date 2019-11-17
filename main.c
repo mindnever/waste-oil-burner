@@ -590,19 +590,6 @@ static void UI_Task()
         }
         
         ThermalZone *zone = Zones_GetZone(zi[current_zone]);
-        
-        if(monitor_mode) { // TODO: output JSON for MQTT
-            printf_P(PSTR("State:%d [%s], s_A:%u, s_B:%u, s_C:%u, s_D:%u, t_Oil:%.1f, t_%s:%.1f, Flame:%d IgnCount:%d\r\n"),
-                                FlameData.state, state_name[FlameData.state],
-                                FlameData.sensor,
-                                raw_adc[1],
-                                raw_adc[2],
-                                raw_adc[3], 
-                                (float)oil->Current / 10, zn[current_zone],
-                                (float)zone->Current / 10,
-                                (int)FlameData.burning, (int)FlameData.ignition_count);
-        }
-
 
         char ab[] = {
 #ifdef BUTTON_A_PORT
@@ -622,6 +609,21 @@ static void UI_Task()
 #endif
             0
         };
+
+        
+        if(monitor_mode) { // TODO: output JSON for MQTT
+            printf_P(PSTR("State:%d [%s], adc[0]:%u, adc[1]:%u, adc[2]:%u, adc[3]:%u, t_Oil:%.1f, t_%s:%.1f, Flame:%d IgnCount:%d buttons=%s\r\n"),
+                                FlameData.state, state_name[FlameData.state],
+                                FlameData.sensor,
+                                raw_adc[1],
+                                raw_adc[2],
+                                raw_adc[3], 
+                                (float)oil->Current / 10, zn[current_zone],
+                                (float)zone->Current / 10,
+                                (int)FlameData.burning, (int)FlameData.ignition_count, ab);
+        }
+
+
 
         lcd_move(0, 0);
         lcd_printf_P(PSTR("F:%02u %s %-6s"), FlameData.sensor/1000, ab, state_name[FlameData.state]);
