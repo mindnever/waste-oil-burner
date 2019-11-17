@@ -74,6 +74,7 @@ static void lcd_command(uint8_t cmd)
 #endif
 }
 
+
 static void lcd_data(uint8_t data)
 {
   lcd_write(data >> 4, true);
@@ -84,12 +85,17 @@ static void lcd_data(uint8_t data)
 
 }
 
+static void lcd_data_xlate(uint8_t data)
+{
+ if(data == 'B') { data = 0x02; } // B
+ lcd_data(data);
+}
 
 void lcd_puts(const char *str)
 {
   char ch;
   while((ch = *str++)) {
-    lcd_data(ch);
+    lcd_data_xlate(ch);
   }
 }
 
@@ -105,7 +111,7 @@ void lcd_printf(const char *fmt, ...)
   char ch;
   
   for(int i = 0; i < sizeof(tmp) && (ch = tmp[i]); ++i) {
-    lcd_data(ch);
+    lcd_data_xlate(ch);
   }
 
   va_end(ap);
@@ -122,7 +128,7 @@ void lcd_printf_P(const char *fmt, ...)
   char ch;
   
   for(int i = 0; i < sizeof(tmp) && (ch = tmp[i]); ++i) {
-    lcd_data(ch);
+    lcd_data_xlate(ch);
   }
 
   va_end(ap);
@@ -163,14 +169,24 @@ void lcd_init()
   
   // define degree symbol
   lcd_command( LCD_SETCGRAMADDR + 8);
-  lcd_data( 0x1c );
+  lcd_data( 0x8 );
   lcd_data( 0x14 );
-  lcd_data( 0x1c );
+  lcd_data( 0x8 );
   lcd_data( 0 );
   lcd_data( 0 );
   lcd_data( 0 );
   lcd_data( 0 );
   lcd_data( 0 );  
+  
+  lcd_command( LCD_SETCGRAMADDR + 16 ); // Nicer capital B letter.
+  lcd_data( 0x1e );
+  lcd_data( 0x11 );
+  lcd_data( 0x11 );
+  lcd_data( 0x1e );
+  lcd_data( 0x11 );
+  lcd_data( 0x11 );
+  lcd_data( 0x1e );
+  lcd_data( 0 );
 
   lcd_backlight(true);
 }
