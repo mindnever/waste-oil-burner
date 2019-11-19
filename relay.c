@@ -150,6 +150,17 @@ void Relay_Init()
 #endif /* K8_PORT */
 }
 
+void Relay_Set(enum RelayID id, bool s)
+{
+    if(s) {
+        state |= _BV(id);
+    } else {
+        state &= ~_BV(id);
+    }
+    
+    k_set(RelayConfiguration.K[id], s);
+}
+
 void Relay_On(enum RelayID id)
 {
     state |= _BV(id);

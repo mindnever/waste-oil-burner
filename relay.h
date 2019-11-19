@@ -28,6 +28,8 @@ extern RelayConfig RelayConfiguration;
 void Relay_Init(void);
 
 const char *Relay_Name(enum RelayID id);
+
+void Relay_Set(enum RelayID id, bool state);
 void Relay_On(enum RelayID id);
 void Relay_Off(enum RelayID id);
 bool Relay_State(enum RelayID id);
