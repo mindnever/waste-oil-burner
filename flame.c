@@ -64,6 +64,7 @@ void Flame_Init(void)
     FlameConfiguration.flame_time = 3000;
     FlameConfiguration.retry_count = 3;
     FlameConfiguration.flame_trig = 61000;
+    FlameConfiguration.manage_oil = true;
 }
 
 void Flame_Reset(void)
@@ -97,7 +98,9 @@ void Flame_Task(void)
             led_b = blink_slow;
 
             // turn off oil heater
-            oil->Config.Enabled = false;            
+            if(FlameConfiguration.manage_oil) {
+                oil->Config.Enabled = false;            
+            }
             break;
 
         case state_idle:
@@ -107,13 +110,17 @@ void Flame_Task(void)
             timer = 0;
             
             // turn off oil heater
-            oil->Config.Enabled = false;
+            if(FlameConfiguration.manage_oil) {
+                oil->Config.Enabled = false;
+            }
             break;
 
         case state_wait:
         case state_preheat: // waiting for oil to be *not* cold (hot oil trigger is for oil heating state machine)
 
-            oil->Config.Enabled = true;            
+            if(FlameConfiguration.manage_oil) {
+                oil->Config.Enabled = true;    
+            }
             
             if( !Zones_IsCold( ZONE_ID_OIL ) ) {
                 FlameData.state = state_fan;
@@ -198,13 +205,15 @@ void Flame_CLI(int argc, const char * const *argv)
                           "flame_time %u (ms)\r\n"
                           "flame_trig %u\r\n"
                           "retry_count %u\r\n"
+                          "manage_oil %s\r\n"
         ), FlameConfiguration.fan_time,
            FlameConfiguration.air_time,
            FlameConfiguration.spark_time,
            FlameConfiguration.detect_time,
            FlameConfiguration.flame_time,
            FlameConfiguration.flame_trig,
-           (uint16_t)FlameConfiguration.retry_count
+           (uint16_t)FlameConfiguration.retry_count,
+           FlameConfiguration.manage_oil ? "yes" : "no"
         );
     } else {
         if(argc > 1) {
@@ -223,6 +232,12 @@ void Flame_CLI(int argc, const char * const *argv)
                 FlameConfiguration.flame_trig = val;
             } else if(!strcasecmp(argv[0], "retry_count")) {
                 FlameConfiguration.retry_count = val;
+            } else if(!strcasecmp(argv[0], "manage_oil")) {
+                if(!strcasecmp(argv[1], "yes")) {
+                    FlameConfiguration.manage_oil = true;
+                } else if(!strcasecmp(argv[1], "no")) {
+                    FlameConfiguration.manage_oil = false;
+                }
             } else {
                 unknown = true;
             }

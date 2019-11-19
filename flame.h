@@ -30,7 +30,8 @@ extern struct FlameConfiguration {
     uint16_t detect_time; // detect flame
     uint16_t flame_time; // FLAME_SENSOR_DELAY
     uint16_t flame_trig; // flame trigger (def 61000)
-    uint8_t retry_count;
+    uint8_t retry_count:4;
+    uint8_t manage_oil:1;
 } FlameConfiguration;
 
 #define IS_BURNING() (FlameData.sensor < FlameConfiguration.flame_trig)
