@@ -12,6 +12,8 @@
 
 #BOARD ?= PROMICRO
 
+PORT ?= /dev/cu.usbserial-A50285BI
+
 ifeq ($(BOARD),)
 $(error BOARD must be set)
 endif
@@ -47,7 +49,7 @@ DEVICE=atmega328p
 FLASH=28672
 RAM=2048
 F_CPU = 8000000
-AVRDUDE = avrdude -v -c arduino -p $(DEVICE) -P/dev/tty.SLAB_USBtoUART -b57600
+AVRDUDE = avrdude -v -c arduino -p $(DEVICE) -P$(PORT) -b38400
 
 OBJECTS += usb_stubs.o lcd_gpio.o
 
