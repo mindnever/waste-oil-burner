@@ -91,6 +91,8 @@ typedef enum {
     _UI_MODE_MAX,
 } ui_mode_t;
 
+static uint16_t lcd_reinit = 0;
+
 static ui_mode_t ui_mode = UI_MODE_STATUS;
 static uint8_t ui_refresh = 0;
 
@@ -445,7 +447,7 @@ typedef struct {
 static void UI_Task()
 {
     static uint8_t status = 0;
-    static uint16_t lcd_reinit = 0;
+
     static uint16_t ui_idle = 0;
     static uint8_t current_zone = 0;
     static uint16_t cycle = 0;
@@ -564,10 +566,10 @@ static void UI_Task()
         ThermalZone *oil = Zones_GetZone(ZONE_ID_OIL);
         
         static const char *zn[] = {
-            "W", "1", "2", "3", "4", 0
+            "O", "W", "1", "2", "3", "4", 0
         };
         static const enum ZoneID zi[] = {
-            ZONE_ID_WATER, ZONE_ID_EXT1, ZONE_ID_EXT2, ZONE_ID_EXT3, ZONE_ID_EXT4
+            ZONE_ID_OIL, ZONE_ID_WATER, ZONE_ID_EXT1, ZONE_ID_EXT2, ZONE_ID_EXT3, ZONE_ID_EXT4
         };
         
         
@@ -591,7 +593,7 @@ static void UI_Task()
         
         ThermalZone *zone = Zones_GetZone(zi[current_zone]);
 
-        char ab[] = {
+        char ab[10] = {
 #ifdef BUTTON_A_PORT
             IS_PRESSED(button_a) ? 'A' : ' ',
 #else
@@ -631,7 +633,9 @@ static void UI_Task()
         
         switch(ui_mode) {
             case UI_MODE_STATUS:
-                lcd_printf_P(PSTR("O:%3d" SYM_DEG "C  %s:%3d" SYM_DEG "C"), (int)oil->Current / 10, zn[current_zone], (int)zone->Current / 10);
+                snprintf_P(ab, sizeof(ab), PSTR("%.1f"), (float)zone->Current / 10);
+//                lcd_printf_P(PSTR("O:%3d" SYM_DEG "C  %s:%3d" SYM_DEG "C"), (int)oil->Current / 10, zn[current_zone], (int)zone->Current / 10);
+                lcd_printf_P(PSTR("%s:%s" SYM_DEG "C (%.1f)   "), zn[current_zone], zone->Valid ? ab : "--.-", (float)zone->Config.SetPoint / 10);
                 break;
             default:break;
         }
@@ -717,7 +721,12 @@ int main(void)
         
         Button_Task();
         
+        state_t pstate = FlameData.state;
         Flame_Task();
+
+        if(pstate != FlameData.state) {
+            lcd_reinit = 750/TICK_MS;
+        }
         
 
         Update_ZoneFlags();
