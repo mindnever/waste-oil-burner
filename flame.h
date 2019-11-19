@@ -14,6 +14,7 @@ typedef enum
     state_fault, // 8
 } state_t;
 
+#define _state_count 9
 
 extern struct FlameData {
     state_t state;

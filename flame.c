@@ -21,7 +21,32 @@
 
 #define FLAME_SENSOR_DELAY (FlameConfiguration.flame_time / TICK_MS)
 
-
+static struct {
+    bool fan;
+    bool air;
+    bool spark;
+} relay_state[ _state_count ] = {
+    [ state_fan ] = {
+        .fan = true
+    },
+    [ state_air ] = {
+        .fan = true,
+        .air = true,
+    },
+    [ state_spark ] = {
+        .fan = true,
+        .air = true,
+        .spark = true,
+    },
+    [ state_detect_flame ] = {
+        .fan = true,
+        .air = true,
+    },
+    [ state_burn ] = { 
+        .fan = true,
+        .air = true,
+    }
+};
 
 static uint32_t timer = 0;
 
@@ -71,10 +96,6 @@ void Flame_Task(void)
             led_a = blink_slow;
             led_b = blink_slow;
 
-            Relay_Off( RELAY_FAN );
-            Relay_Off( RELAY_AIR );
-            Relay_Off( RELAY_SPARK );
-
             // turn off oil heater
             oil->Config.Enabled = false;            
             break;
@@ -84,11 +105,6 @@ void Flame_Task(void)
             led_b = blink_slow;
 
             timer = 0;
-            
-            // turn off relays
-            Relay_Off( RELAY_FAN );
-            Relay_Off( RELAY_AIR );
-            Relay_Off( RELAY_SPARK );
             
             // turn off oil heater
             oil->Config.Enabled = false;
@@ -100,7 +116,6 @@ void Flame_Task(void)
             oil->Config.Enabled = true;            
             
             if( !Zones_IsCold( ZONE_ID_OIL ) ) {
-                Relay_On( RELAY_FAN );
                 FlameData.state = state_fan;
                 timer = 0;
                 ++FlameData.ignition_count;
@@ -109,7 +124,6 @@ void Flame_Task(void)
             
         case state_fan:
             if( ++timer  > TIMEOUT_FAN ) {
-                Relay_On( RELAY_AIR );
                 FlameData.state = state_air;
                 timer = 0;
             }
@@ -118,7 +132,6 @@ void Flame_Task(void)
         case state_air:
             if( ++timer > TIMEOUT_AIR ) {
                 FlameData.state = state_spark;
-                Relay_On( RELAY_SPARK );
                 led_a = blink_fast;
                 timer = 0;
             }
@@ -135,7 +148,6 @@ void Flame_Task(void)
             break;
         case state_detect_flame:
             if( ++timer > TIMEOUT_FLAME ) {
-                Relay_Off( RELAY_SPARK );
                 if(FlameData.ignition_count > IGNITION_RETRY) {
                     FlameData.state = state_fault;
                 } else {
@@ -143,7 +155,6 @@ void Flame_Task(void)
                 }
                 timer = 0;
             } else if( IS_BURNING() ) {
-                Relay_Off( RELAY_SPARK );
                 led_a = blink_off;
                 led_b = blink_slow;
                 
@@ -164,6 +175,10 @@ void Flame_Task(void)
             }
             break;
     }
+    
+    Relay_Set( RELAY_AIR,   relay_state[ FlameData.state ].air );
+    Relay_Set( RELAY_FAN,   relay_state[ FlameData.state ].fan );
+    Relay_Set( RELAY_SPARK, relay_state[ FlameData.state ].spark );
 }
 
 void Flame_CLI(int argc, const char * const *argv)
