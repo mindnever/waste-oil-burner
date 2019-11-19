@@ -20,6 +20,9 @@ static const char *zone_names[] = {
     "external_4",
 };
 
+#define CURRENT_VALID (10*60*1000L)/TICK_MS
+
+
 void Zones_Init(void)
 {
 // read config from eeprom
@@ -46,6 +49,7 @@ void Zones_SetCurrent(sensor_type_t type, uint16_t id, int16_t current)
         if((zone->Config.SensorType == type)
         && ((type != SENSOR_RFRX) || (rfrx_id == zone->Config.SensorID))) {
             zone->Current = current;
+            zone->Valid = CURRENT_VALID;
         }
     }
 }
@@ -55,7 +59,12 @@ void Zones_Update(uint8_t master_enable)
     for(uint8_t i = 0; i < _WOB_REPORT_ZONE_COUNT; ++i) {
         ThermalZone *zone = Zones_GetZone(i);
         if(!zone) { continue; }// how can this be? cannot..
-        if(!master_enable || !zone->Config.Enabled) {
+        
+        if(zone->Valid > 0) {
+            --zone->Valid;
+        }
+        
+        if(!master_enable || !zone->Config.Enabled || !zone->Valid) {
             zone->Active = false;
         } else if(zone->Current < (zone->Config.SetPoint - (int16_t)zone->Config.Hysteresis)) {
             zone->Active = true;;
@@ -67,13 +76,14 @@ void Zones_Update(uint8_t master_enable)
 
 void Zones_DumpZone(enum ZoneID id, ThermalZone *zone)
 {
-    printf_P(PSTR("zone %u (%s) %s %s setpoint %.1f current %.1f hysteresis %.1f sensor "),
+    printf_P(PSTR("zone %u (%s) %s %s setpoint %.1f current %.1f %shysteresis %.1f sensor "),
                                         id + 1,
                                         zone_names[id],
                                         zone->Config.Enabled ? "ENABLED" : "DISABLED",
                                         zone->Active ? "ACTIVE" : "INACTIVE",
                                         (float)zone->Config.SetPoint / 10,
                                         (float)zone->Current / 10,
+                                        zone->Valid > 0 ? "valid " : "",
                                         (float)zone->Config.Hysteresis / 10);
 
     switch(zone->Config.SensorType) {

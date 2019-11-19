@@ -42,6 +42,7 @@ typedef struct {
 
     int16_t Current;
     uint8_t Active;
+    uint32_t Valid;
 
     ThermalZoneConfiguration Config;
 
