@@ -23,7 +23,7 @@ BUILDDIR = build/$(BOARD)
 FW = $(BUILDDIR)/firmware
 
 TICK_MS = 10
-OBJECTS = main.o twi.o lcd.o rx.o led.o zones.o flame.o adc.o eeconfig.o relay.o microrl/src/microrl.o
+OBJECTS = main.o twi.o lcd.o rx.o led.o zones.o flame.o adc.o eeconfig.o relay.o fifo.o microrl/src/microrl.o usart.o mqtt.o cli.o
 
 ifeq ($(BOARD),PROMICRO)
 
@@ -40,7 +40,7 @@ LUFA_PATH = ../lufa-build
 LUFA_CFLAGS = -I$(LUFA_PATH) -DARCH=ARCH_AVR8 -DF_USB=$(F_CPU)UL -DUSE_LUFA_CONFIG_HEADER -I$(LUFA_PATH)/Config/
 LUFA_LIBS = $(LUFA_PATH)/obj/*.o
 
-DEFINES += -DUSE_USB_VCP -DUSE_USB_HID
+DEFINES += -DUSE_USB_VCP
 
 else
 ifeq ($(BOARD),PROMINI)
@@ -70,7 +70,7 @@ endif
 
 DEFINES += -DF_CPU=$(F_CPU) -DBOARD=BOARD_$(BOARD) -DBOARD_PROMICRO=100 -DBOARD_PROMINI=101 -DTICK_MS=$(TICK_MS)
 
-COMPILE = avr-gcc -Wall -O2 -std=gnu99 -I. -mmcu=$(DEVICE) $(DEFINES) $(LUFA_CFLAGS) -ffunction-sections -fdata-sections -funsigned-char -funsigned-bitfields -fpack-struct -fshort-enums -ffreestanding
+COMPILE = avr-gcc -Wall -Os -std=gnu99 -I. -mmcu=$(DEVICE) $(DEFINES) $(LUFA_CFLAGS) -ffunction-sections -fdata-sections -funsigned-char -funsigned-bitfields -fpack-struct -fshort-enums -ffreestanding
 LINK = avr-gcc $(LUFA_LIBS)  -Wl,--gc-sections -Wl,--relax -mmcu=$(DEVICE) -Wl,-u,vfprintf -lprintf_flt -lm
 
 # symbolic targets:

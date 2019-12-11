@@ -6,13 +6,13 @@
 #endif
 
 #include <avr/pgmspace.h>
+#include <stdio.h>
 
-void VCP_Init(void);
+FILE *VCP_Init(void);
 
 void VCP_Task(void);
 
 int VCP_Read(uint8_t *buf, int size);
-int VCP_Write(uint8_t *buf, int size);
 
 #ifdef USE_USB_VCP
 void EVENT_VCP_SetLineEncoding(CDC_LineEncoding_t *LineEncoding);

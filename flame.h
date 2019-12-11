@@ -32,6 +32,7 @@ extern struct FlameConfiguration {
     uint16_t flame_trig; // flame trigger (def 61000)
     uint8_t retry_count:4;
     uint8_t manage_oil:1;
+    float flame_lpf;
 } FlameConfiguration;
 
 #define IS_BURNING() (FlameData.sensor < FlameConfiguration.flame_trig)

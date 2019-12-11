@@ -3,11 +3,9 @@
 
 typedef enum {
     SENSOR_NONE,
-    SENSOR_ANALOG1,
-    SENSOR_ANALOG2,
+    SENSOR_ANALOG,
     SENSOR_BINARY, /* button_b */
     SENSOR_RFRX,
-    SENSOR_ANALOG3,
 } sensor_type_t;
 
 typedef struct {
@@ -19,24 +17,6 @@ typedef struct {
 
     uint8_t  Enabled;
 } ThermalZoneConfiguration;
-
-/*
-typedef struct {
-    int16_t SetPoint;
-    int16_t Current;
-    uint8_t Flags; // use hid.h: HID_WOB_Report_04_t Flags values ( WOB_REPORT_FLAGS_CONTROL_ENABLED, WOB_REPORT_FLAGS_OUTPUT_ACTIVE)
-    
-    sensor_type_t _sensor_type;
-
-    union {
-        struct {
-            uint16_t sensor_id;
-        } rfrx;
-    } _config;
-    
-    uint16_t _hysteresis;
-} ThermalZone;
-*/
 
 typedef struct {
 

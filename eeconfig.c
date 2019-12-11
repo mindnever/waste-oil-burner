@@ -7,12 +7,13 @@
 #include "vcp.h"
 #include "flame.h"
 #include "relay.h"
+#include "mqtt.h"
 
 #include <util/crc16.h>
 #include <avr/eeprom.h>
 #include <string.h>
 
-#define EELAYOUT_VERSION 5
+#define EELAYOUT_VERSION 7
 
 struct EELayout {
     uint8_t  Version;
@@ -31,10 +32,7 @@ void EEConfig_Load(void)
     
     eeprom_read_block(&buffer, &eevars, sizeof(buffer));
 
-    printf_P(PSTR("EEConfig_Load() layout version %u @%u\r\n"), buffer.Version, &eevars);
-
     if(buffer.Version != EELAYOUT_VERSION) {
-        printf_P(PSTR("EEConfig_Load() layout version mismatch %u != %u\r\n"), buffer.Version, EELAYOUT_VERSION);
         return;
     }
     
@@ -49,11 +47,9 @@ void EEConfig_Load(void)
     }
     
     if(ecrc != crc) {
-        printf_P(PSTR("EEConfig_Load() bad crc %u != %u\r\n"), ecrc, crc);
+        printf_P(PSTR("EEConfig_Load() bad crc %u != %u\n"), ecrc, crc);
         return;
     }
-    
-    printf_P(PSTR("EEConfig_Load() crc ok stored %u calculated %u\r\n"), ecrc, crc);
     
     for(uint8_t i = 0; i < NUM_ZONES; ++i) {
         ThermalZone *zone = Zones_GetZone(i);

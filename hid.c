@@ -4,6 +4,7 @@
 #include "HidSensorSpec.h"
 #include "vcp.h"
 
+#if defined(USE_USB_HID)
 #define REPORT_QUEUE_SIZE 8
 
 struct ReportItem {
@@ -126,3 +127,4 @@ void CALLBACK_HID_Device_ProcessHIDReport(USB_ClassInfo_HID_Device_t* const HIDI
                                           const uint16_t ReportSize)
 {
 }
+#endif /* USE_USB_HID */

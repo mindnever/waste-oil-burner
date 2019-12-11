@@ -2,20 +2,15 @@
 #include "usb_descriptors.h"
 #include <LUFA/Drivers/USB/USB.h>
 #include <LUFA/Platform/Platform.h>
-#include "led.h"
+#include "fifo.h"
 
 #include <stdarg.h>
 
 #define VCP_RX_FIFO_SIZE 64
-
-typedef struct {
-  uint16_t in, out;
-  uint16_t size;
-  uint8_t buffer[0];
-} vcp_fifo_t;
+#define VCP_TX_FIFO_SIZE 64
 
 static struct {
-  vcp_fifo_t fifo;
+  fifo_t fifo;
   uint8_t _alloc[VCP_RX_FIFO_SIZE];
 } rx = { 
   .fifo = {
@@ -25,6 +20,16 @@ static struct {
   }
 };
 
+static struct {
+  fifo_t fifo;
+  uint8_t _alloc[VCP_TX_FIFO_SIZE];
+} tx = {
+  .fifo = {
+    .in = 0,
+    .out = 0,
+    .size = VCP_TX_FIFO_SIZE,
+  }
+};
 
 static CDC_LineEncoding_t LineEncoding = { .BaudRateBPS = 0,
                                            .CharFormat  = CDC_LINEENCODING_OneStopBit,
@@ -32,38 +37,40 @@ static CDC_LineEncoding_t LineEncoding = { .BaudRateBPS = 0,
                                            .DataBits    = 8                            };
 
 
-static int fifo_write(vcp_fifo_t *fifo, const uint8_t *buf, int len)
-{
-  int i;
-  for(i = 0; i < len; ++i) {
-    fifo->buffer[fifo->in++] = buf[i];
-    if(fifo->in == fifo->size) {
-      fifo->in = 0;
-    }
+static uint16_t usb_write_sync(const void *buf, uint16_t len);
 
-    if(fifo->in == fifo->out) { // overflow
-      led_a = blink_pulse;
-    }
+
+static int usb_putchar(char c, FILE *stream)
+{
+  if(fdev_get_udata(stream) && (c == '\n')) {
+    usb_putchar('\r', stream);
   }
-  return i;
+
+  tx.fifo.buffer[tx.fifo.in++] = c;
+
+  if(tx.fifo.in == tx.fifo.size) {
+    usb_write_sync(tx.fifo.buffer, tx.fifo.in);
+    tx.fifo.in = 0;
+  }
+  return 0;
 }
 
-static int fifo_read(vcp_fifo_t *fifo, uint8_t *buf, int len)
+static int usb_getchar(FILE *stream)
 {
-  int i;
+  uint8_t buf;
   
-  for(i = 0; (i < len) && (fifo->in != fifo->out); ++i) {
-    buf[i] = fifo->buffer[fifo->out++];
-    if(fifo->out == fifo->size) {
-      fifo->out = 0;
-    }
+  if(fifo_read(&rx.fifo, &buf, 1) == 1) {
+    return buf;
+  } else {
+    return _FDEV_ERR;
   }
-  
-  return i;
 }
 
-void VCP_Init(void)
+FILE *VCP_Init(void)
 {
+    static FILE myfp = FDEV_SETUP_STREAM(usb_putchar, usb_getchar, _FDEV_SETUP_RW);
+
+    return &myfp;
 }
 
 /** Event handler for the USB_ConfigurationChanged event. This is fired when the host set the current configuration
@@ -145,6 +152,11 @@ void VCP_Task(void)
 	if (USB_DeviceState != DEVICE_STATE_Configured)
 	  return;
 
+        if(tx.fifo.in > 0) {
+          usb_write_sync(tx.fifo.buffer, tx.fifo.in);
+          tx.fifo.in = 0;
+        }
+
 	/* Select the Serial Rx Endpoint */
 	Endpoint_SelectEndpoint(CDC_RX_EPADDR);
 
@@ -152,17 +164,18 @@ void VCP_Task(void)
 	  
 	  uint16_t DataLength = Endpoint_BytesInEndpoint();
 	  
-	  uint8_t Buffer[DataLength];
-
-	  Endpoint_Read_Stream_LE(&Buffer, DataLength, NULL);
-
-	  cli();
-          fifo_write(&rx.fifo, Buffer, DataLength);
-          sei();
-
-	  Endpoint_ClearOUT();
+	  if(DataLength <= fifo_avail_write(&rx.fifo)) {
 	  
-	  EVENT_VCP_DataReceived();
+            uint8_t Buffer[DataLength];
+
+            Endpoint_Read_Stream_LE(&Buffer, DataLength, NULL);
+
+            fifo_write(&rx.fifo, Buffer, DataLength);
+
+            Endpoint_ClearOUT();
+            
+            EVENT_VCP_DataReceived();
+          }
         }
 }
 
@@ -194,19 +207,4 @@ static uint16_t usb_write_sync(const void *buf, uint16_t len)
   }
   
   return bytes_processed;
-}
-
-int VCP_Write(uint8_t *buf, int len)
-{
-  return usb_write_sync(buf, len);
-}
-
-int VCP_Read(uint8_t *buf, int len)
-{
-  return fifo_read(&rx.fifo, buf, len);
-}
-
-void VCP_Puts(const char *str)
-{
-  usb_write_sync(str, strlen(str));
 }

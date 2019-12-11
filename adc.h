@@ -6,6 +6,7 @@
 typedef struct {
     float gain;
     float offset;
+    float filter;
 } AnalogSensorCalibration;
 
 typedef struct {
@@ -18,5 +19,6 @@ extern uint16_t raw_adc[NUM_ANALOG_SENSORS + 1];
 
 void ADC_Init(void);
 void ADC_Task(void);
+void ADC_CLI(int argc, const char * const *argv);
 
 #endif /* _WOB_ADC_H_ */

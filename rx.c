@@ -2,12 +2,14 @@
 #include <avr/interrupt.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
 
 #include "rx.h"
 #include "hw.h"
 #include "usb.h"
 #include "vcp.h"
 #include "led.h"
+#include "mqtt.h"
 
 #define TIMER1_PRESCALER_8X _BV(CS11)
 #define TIMER1_CAPTURE_FALLING_EDGE (0)
@@ -53,16 +55,15 @@ uint16_t sys_idle_ticks = IDLE_TICKS;
 uint16_t sys_busy_ticks = 0;
 uint32_t sys_millis;
 
-static uint16_t sys_idle_exit = 0;
-
-
 void Sys_Idle()
 {
   sys_millis += TICK_MS;
-  sys_busy_ticks = sys_idle_exit - TCNT1;
-  while(TCNT1 != sys_idle_exit);
-  sys_idle_exit += IDLE_TICKS;
-
+  sys_busy_ticks = OCF1C - TCNT1;
+  while(!(TIFR1 & _BV(OCF1C))) {
+    mqtt_idle();
+  }
+  OCR1C += IDLE_TICKS;
+  TIFR1 |= _BV(OCF1C);
 }
 
 void RfRx_Init()
@@ -79,7 +80,7 @@ void RfRx_Init()
 
   TIMSK1 = _BV(ICIE1); // enable input capture interrupt
 
-  sys_idle_exit = TCNT1 + IDLE_TICKS;
+  OCR1C = TCNT1 + IDLE_TICKS;
 }
 
 void RfRx_Task(RfRx_Callback cb)
@@ -212,7 +213,7 @@ typedef struct {
 
 #define BURST_LEN 10
 
-static void rubicson_decode(packet_t *packet, struct RfRx_SensorData *data)
+static bool rubicson_decode(packet_t *packet, struct RfRx_SensorData *data)
 {
 /*
   ID ID ID CC         8-bit ID, the two least significant might encode the channel
@@ -226,6 +227,9 @@ static void rubicson_decode(packet_t *packet, struct RfRx_SensorData *data)
                         - humidity (or 1111 xxxx if not available); or
                         - a CRC, e.g. Rubicson, algorithm in source code linked above
 */
+      if((packet->data[3] & 0xf0) != 0xf0) {
+        return false;
+      }
 
       data->temp = (int16_t)((uint16_t)(packet->data[1] << 12) | (packet->data[2] << 4));
       data->temp = data->temp >> 4;
@@ -235,6 +239,8 @@ static void rubicson_decode(packet_t *packet, struct RfRx_SensorData *data)
       data->sensor_id = packet->data[0];
       
       data->humidity = ((packet->data[3] & 0x0f) << 4) | (packet->data[4] >> 4);
+      
+      return true;
 }
 
 static uint8_t RfRx_decode(RfRx_Callback cb)
@@ -315,13 +321,12 @@ static uint8_t RfRx_decode(RfRx_Callback cb)
   
   if(maxj < hcurrent) {
     
-    rubicson_decode(&history[maxj], &data);
+    if(rubicson_decode(&history[maxj], &data) && cb) {
     
-    data._raw = history[maxj].data;
-    data._samples = decoded;
-    data._matching = hits[maxj];
+      data._raw = history[maxj].data;
+      data._samples = decoded;
+      data._matching = hits[maxj];
 
-    if(cb) {
       cb(&data);
     }
   }
@@ -337,7 +342,7 @@ static void RfRx_dump()
     for(int i = 0; i < rx_current && i < 50; ++i) {
       printf("%u ", rx_buffer[i]);
     }
-    printf("\r\n");
+    printf("\n");
 
 }
 #endif

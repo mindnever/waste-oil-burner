@@ -65,6 +65,7 @@ void Flame_Init(void)
     FlameConfiguration.retry_count = 3;
     FlameConfiguration.flame_trig = 61000;
     FlameConfiguration.manage_oil = true;
+    FlameConfiguration.flame_lpf = 0.0;
 }
 
 void Flame_Reset(void)
@@ -193,49 +194,56 @@ void Flame_CLI(int argc, const char * const *argv)
     bool unknown = false;
     
     if(argc == 0) {
-        printf_P(PSTR("flame command missing op\r\n"));
+        printf_P(PSTR("flame command missing op\n"));
         return;
     }
     
-    if(!strcasecmp(argv[0], "print")) {
-        printf_P(PSTR("fan_time %u (ms)\r\n"
-                          "air_time %u (ms)\r\n"
-                          "spark_time %u (ms)\r\n"
-                          "detect_time %u (ms)\r\n"
-                          "flame_time %u (ms)\r\n"
-                          "flame_trig %u\r\n"
-                          "retry_count %u\r\n"
-                          "manage_oil %s\r\n"
+    if(!strcasecmp_P(argv[0], PSTR("print"))) {
+        printf_P(PSTR("fan_time %u (ms)\n"
+                          "air_time %u (ms)\n"
+                          "spark_time %u (ms)\n"
+                          "detect_time %u (ms)\n"
+                          "flame_time %u (ms)\n"
+                          "flame_trig %u (current %u)\n"
+                          "flame_lpf %.4f\n"
+                          "retry_count %u\n"
+                          "manage_oil %s\n"
         ), FlameConfiguration.fan_time,
            FlameConfiguration.air_time,
            FlameConfiguration.spark_time,
            FlameConfiguration.detect_time,
            FlameConfiguration.flame_time,
            FlameConfiguration.flame_trig,
+           FlameData.sensor,
+           FlameConfiguration.flame_lpf,
            (uint16_t)FlameConfiguration.retry_count,
            FlameConfiguration.manage_oil ? "yes" : "no"
         );
+    } else if(!strcasecmp_P(argv[0], PSTR("reset"))) {
+        Flame_Reset();
     } else {
         if(argc > 1) {
             int val = atoi(argv[1]);
-            if(!strcasecmp(argv[0], "fan_time")) {
+            if(!strcasecmp_P(argv[0], PSTR("fan_time"))) {
                 FlameConfiguration.fan_time = val;
-            } else if(!strcasecmp(argv[0], "air_time")) {
+            } else if(!strcasecmp_P(argv[0], PSTR("air_time"))) {
                 FlameConfiguration.air_time = val;
-            } else if(!strcasecmp(argv[0], "spark_time")) {
+            } else if(!strcasecmp_P(argv[0], PSTR("spark_time"))) {
                 FlameConfiguration.spark_time = val;
-            } else if(!strcasecmp(argv[0], "detect_time")) {
+            } else if(!strcasecmp_P(argv[0], PSTR("detect_time"))) {
                 FlameConfiguration.detect_time = val;
-            } else if(!strcasecmp(argv[0], "flame_time")) {
+            } else if(!strcasecmp_P(argv[0], PSTR("flame_time"))) {
                 FlameConfiguration.flame_time = val;
-            } else if(!strcasecmp(argv[0], "flame_trig")) {
+            } else if(!strcasecmp_P(argv[0], PSTR("flame_trig"))) {
                 FlameConfiguration.flame_trig = val;
-            } else if(!strcasecmp(argv[0], "retry_count")) {
+            } else if(!strcasecmp_P(argv[0], PSTR("flame_lpf"))) {
+                FlameConfiguration.flame_lpf = atof(argv[1]);
+            } else if(!strcasecmp_P(argv[0], PSTR("retry_count"))) {
                 FlameConfiguration.retry_count = val;
-            } else if(!strcasecmp(argv[0], "manage_oil")) {
-                if(!strcasecmp(argv[1], "yes")) {
+            } else if(!strcasecmp_P(argv[0], PSTR("manage_oil"))) {
+                if(!strcasecmp_P(argv[1], PSTR("yes"))) {
                     FlameConfiguration.manage_oil = true;
-                } else if(!strcasecmp(argv[1], "no")) {
+                } else if(!strcasecmp_P(argv[1], PSTR("no"))) {
                     FlameConfiguration.manage_oil = false;
                 }
             } else {
@@ -248,6 +256,6 @@ void Flame_CLI(int argc, const char * const *argv)
     }
     
     if(unknown) {
-        printf_P(PSTR("unknown flame command '%s'\r\n"), argv[0]);
+        printf_P(PSTR("??? '%s'\n"), argv[0]);
     }
 }

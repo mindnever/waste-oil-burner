@@ -1,11 +1,9 @@
-#include <util/delay.h>
 #include <avr/wdt.h>
 #include <avr/pgmspace.h>
 #include <avr/interrupt.h>
 
 #include <string.h>
 
-#include "boot.h"
 #include "hw.h"
 
 #if defined(USE_USB_VCP) || defined(USE_USB_HID)
@@ -23,13 +21,15 @@
 #include "lcd.h"
 #include "led.h"
 #include "rx.h"
+#include "tx.h"
 #include "zones.h"
 #include "flame.h"
 #include "adc.h"
 #include "eeconfig.h"
 #include "relay.h"
-
-#include "microrl/src/microrl.h"
+#include "usart.h"
+#include "mqtt.h"
+#include "cli.h"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -62,22 +62,24 @@
 #define BUTTON_DEBOUNCE (30/TICK_MS)
 #define BUTTON_LONGPRESS (3000/TICK_MS)
 
-#define FORCE_HID_REPORTS (1000/TICK_MS)
+#define HID_TIME (750/TICK_MS)
+#define HID_FORCE (5000/TICK_MS)
+#define SEQ_TICKS (1000/TICK_MS)
 
 //#define MASTER_ENABLE IS_PRESSED(button_b)
 #define MASTER_ENABLE true
 
 
 static const char *state_name[] = {
-    "Idle",
-    "Wait",
-    "Prheat",
-    "Fan",
-    "Air",
-    "Spark",
-    "Flame?",
-    "Burn",
-    "Fault",
+    [state_idle] = "Idle",
+    [state_wait] = "Wait",
+    [state_preheat] = "Prheat",
+    [state_fan] = "Fan",
+    [state_air] = "Air",
+    [state_spark] = "Spark",
+    [state_detect_flame] = "Flame?",
+    [state_burn] = "Burn",
+    [state_fault] = "Fault",
 };
 
 typedef enum {
@@ -97,20 +99,16 @@ static ui_mode_t ui_mode = UI_MODE_STATUS;
 static uint8_t ui_refresh = 0;
 
 static void on_rfrx_sensor_data(struct RfRx_SensorData *data);
-
-static uint16_t force_hid_reports_counter;
-static uint8_t force_hid_reports;
+static void on_mqtt_msg(const char *topic, const char *msg);
 
 static void do_hid_report_03();
 static void do_hid_report_04();
 
+bool force_hid_reports = false;
+
 #ifdef HAVE_ENCODER
 static int8_t encoder_event;
 #endif
-
-static uint8_t monitor_mode;
-static uint8_t hid_enabled = 0;
-static microrl_t mrl;
 
 #ifdef BUTTON_A_PORT
 static uint16_t button_a;
@@ -121,146 +119,6 @@ static uint16_t button_b;
 #ifdef BUTTON_R_PORT
 static uint16_t button_r;
 #endif    
-
-static void CLI_Dfu()
-{
-    if(pgm_read_word_near( BOOTLOADER_MAGIC_SIGNATURE_START ) == BOOTLOADER_MAGIC_SIGNATURE) {
-        BootloaderAPI_GoDFU();
-    }
-}
-
-static void CLI_Info()
-{
-    printf_P(PSTR("CPU Usage: %.1f%%\r\n"), 100.0 - (((float)sys_busy_ticks / (float)sys_idle_ticks) * 100));
-    uint16_t bootloader_signature = pgm_read_word_near( BOOTLOADER_MAGIC_SIGNATURE_START );
-    printf_P(PSTR("bootloader_signature: %02x\r\n"), bootloader_signature);
-    if(bootloader_signature != BOOTLOADER_MAGIC_SIGNATURE) {
-        printf_P(PSTR("Unknown bootloader type\r\n"));
-        return;
-    }
-    uint16_t bootloader_class = pgm_read_word_near( BOOTLOADER_CLASS_SIGNATURE_START );
-    printf_P(PSTR("bootloader_class: %02x\r\n"), bootloader_class);
-    printf_P(PSTR("lock: %u\r\n"), BootloaderAPI_ReadLock());
-}
-
-static void CLI_Puts(const char *str)
-{
-    fputs(str, stdout);
-}
-
-static int CLI_Execute(int argc, const char * const *argv)
-{
-    printf_P(PSTR("\r\n"));
-
-    if(!strcasecmp(argv[0], "monitor")) {
-        monitor_mode = 1;
-        printf_P(PSTR("Monitor mode on\r\n"));
-    } else if(!strcasecmp(argv[0], "hid")) {
-        if(argc > 1) {
-            if(!strcasecmp(argv[1], "on")) {
-                hid_enabled = 1;
-            } else if(!strcasecmp(argv[1], "off")) {
-                hid_enabled = 0;
-            }
-        }
-        printf_P(PSTR("HID reporting is %s\r\n"), hid_enabled ? "on" : "off");
-    } else if(!strcasecmp(argv[0], "eeprom") && (argc > 1) && !strcasecmp(argv[1], "format")) {
-        EEConfig_Format();
-    } else if(!strcasecmp(argv[0], "uptime")) {
-        printf_P(PSTR("%lu\r\n"), sys_millis / 1000);
-    } else if(!strcasecmp(argv[0], "info")) {
-        CLI_Info();
-    } else if(!strcasecmp(argv[0], "dfu")) {
-        CLI_Dfu();
-    } else if(!strcasecmp(argv[0], "analog")) {
-        if(argc > 1) {
-            if(!strcasecmp(argv[1], "print")) {
-                // print analog calibration
-                for(unsigned index = 0; index < NUM_ANALOG_SENSORS; ++index) {
-                    printf_P(PSTR("analog %u gain %f offset %f\r\n"), index + 1, ADC_Config.Calibration[index].gain, ADC_Config.Calibration[index].offset);
-                }
-            } else {
-                if(argc > 3) {
-                    unsigned index = atoi(argv[1]);
-                    if(index >= 1 && index <= NUM_ANALOG_SENSORS) {
-                        --index;
-                        
-                        if(!strcasecmp(argv[2], "gain")) {
-                            ADC_Config.Calibration[index].gain = atof(argv[3]);
-                        } else if(!strcasecmp(argv[2], "offset")) {
-                            ADC_Config.Calibration[index].offset = atof(argv[3]);
-                        } else {
-                            printf_P(PSTR("Unknown analog sensor parameter '%s'\r\n"), argv[2]);
-                        }
-                        
-                        EEConfig_Save();
-                        
-                    } else {
-                        printf_P(PSTR("Sensors 1, 2 & 3 are supported only\r\n"));
-                    }
-                    
-                } else {
-                    
-                }
-            }
-        }
-    } else if(!strcasecmp(argv[0], "flame")) {
-        Flame_CLI(argc - 1, argv + 1);
-    } else if(!strcasecmp(argv[0], "relay")) {
-        Relay_CLI(argc - 1, argv + 1);
-    } else if(!strcasecmp(argv[0], "zone")) {
-        if(argc > 1) {
-            if(!strcasecmp(argv[1], "print")) {
-                Zones_Dump();
-            } else  {
-                if(argc > 2) {
-                    ThermalZone *zone;
-                    if((zone = Zones_GetZone(atoi(argv[1]) - 1))) {
-
-                        Zones_ZoneCLI(zone, argc - 2, argv + 2);
-                        
-                        EEConfig_Save();
-                        
-                    } else {
-                        printf_P(PSTR("zone %s does not exist\r\n"), argv[1]);
-                    }
-                } else {
-                    printf_P(PSTR("zone #nr and subcommand required\r\n"));
-                }
-            }
-        } else {
-            printf_P(PSTR("%s op required: [ print | enable | disable ]\r\n"), argv[0]);
-        }
-    } else {
-        printf_P(PSTR("unknown command '%s'\r\n"), argv[0]);
-    }
-    return 0;
-}
-
-static char ** CLI_GetCompletion(int argc, const char * const *argv)
-{
-    static char *tok = 0;
-    return &tok;
-}
-
-static void CLI_Task()
-{
-    uint8_t cmdBuf[65];
-
-    uint16_t r = VCP_Read(cmdBuf, sizeof(cmdBuf) - 2);
-
-    if (r > 0) {
-        if(monitor_mode) {
-            monitor_mode = false;
-            printf_P(PSTR("Monitor mode off\r\n"));
-        }
-        cmdBuf[r] = 0;
-        for(uint16_t i = 0; i < r; ++i) {
-            microrl_insert_char(&mrl, cmdBuf[i]);
-        }
-    }
-}
-
 
 static void IO_Init()
 {
@@ -307,7 +165,8 @@ static void Init_ThermalZones(void)
         zone->Current = 0;
         zone->Active = false;
         zone->Config.Enabled = false;
-        zone->Config.SensorType = SENSOR_ANALOG2;
+        zone->Config.SensorType = SENSOR_ANALOG;
+        zone->Config.SensorID = 2;
         zone->Config.Hysteresis = DEFAULT_WATER_TEMP_HYST * 10;
     }
     
@@ -316,7 +175,8 @@ static void Init_ThermalZones(void)
         zone->Current = 0;
         zone->Active = false;
         zone->Config.Enabled = false;
-        zone->Config.SensorType = SENSOR_ANALOG1;
+        zone->Config.SensorType = SENSOR_ANALOG;
+        zone->Config.SensorID = 1;
         zone->Config.Hysteresis = DEFAULT_OIL_TEMP_HYST * 10;
     }
     
@@ -563,7 +423,7 @@ static void UI_Task()
             lcd_init();
         }
         
-        ThermalZone *oil = Zones_GetZone(ZONE_ID_OIL);
+//        ThermalZone *oil = Zones_GetZone(ZONE_ID_OIL);
         
         static const char *zn[] = {
             "O", "W", "1", "2", "3", "4", 0
@@ -612,20 +472,15 @@ static void UI_Task()
             0
         };
 
-        
-        if(monitor_mode) { // TODO: output JSON for MQTT
-            printf_P(PSTR("State:%d [%s], adc[0]:%u, adc[1]:%u, adc[2]:%u, adc[3]:%u, t_Oil:%.1f, t_%s:%.1f, Flame:%d IgnCount:%d buttons=%s\r\n"),
+#if 0
+        mqtt_publish_P("debug", PSTR("{ \"state\":\"%d/%s\", \"adc0\":\"%u\", \"adc1\":\"%u\", \"adc2\":\"%u\", \"adc3\":\"%u\", \"flame\":\"%d\", \"ignCount\":\"%d\", \"buttons\":\"%s\" }"),
                                 FlameData.state, state_name[FlameData.state],
-                                FlameData.sensor,
+                                raw_adc[0],
                                 raw_adc[1],
                                 raw_adc[2],
                                 raw_adc[3], 
-                                (float)oil->Current / 10, zn[current_zone],
-                                (float)zone->Current / 10,
                                 (int)FlameData.burning, (int)FlameData.ignition_count, ab);
-        }
-
-
+#endif
 
         lcd_move(0, 0);
         lcd_printf_P(PSTR("F:%02u %s %-6s"), FlameData.sensor/1000, ab, state_name[FlameData.state]);
@@ -648,54 +503,17 @@ static void UI_Task()
     }
 }
 
-int main(void)
+static void mini_task()
 {
-    wdt_enable(WDTO_1S);
-    
-#if defined(USE_USB_VCP) || defined(USE_USB_HID)
-    USB_Init();
-#endif
-
-    VCP_Init();
-
-    printf_P(PSTR("Booting\r\n"));
-
-    IO_Init();
-    Relay_Init();
-    
-    Init_ThermalZones();
-    
-    microrl_init(&mrl, CLI_Puts);
-    microrl_set_execute_callback(&mrl, CLI_Execute);
-    microrl_set_complete_callback(&mrl, CLI_GetCompletion);
-    
-#ifdef LED_A_PORT
-    LED_ON( LED_A );
-#endif
-#ifdef LED_B_PORT
-    LED_ON( LED_B );
-#endif
-    
-    ADC_Init();
-
-#ifdef LCD_DATA_PORT
-    lcd_gpio_init();
-#else
-    twi_init();
-#endif
-    lcd_init();
-
-    RfRx_Init();
-    
-    Flame_Init();
-
-    EEConfig_Load();
-
     sei();
+
+    led_a = blink_slow;
+    led_b = blink_fast;
     
-    
-    for(;;)
+    while(true)
     {
+        Sys_Idle();
+
         wdt_reset();
         
 #if defined(USE_USB_VCP) || defined(USE_USB_HID)
@@ -704,16 +522,98 @@ int main(void)
 
         CLI_Task();
 
+
+        handle_led();
+    }
+}
+
+int main(void)
+{
+    wdt_enable(WDTO_1S);
+    
+#if defined(USE_USB_VCP) || defined(USE_USB_HID)
+    USB_Init();
+#endif
+    
+    stdin = stdout = mqtt = USART_Init();
+
+#if defined(USE_USB_VCP)
+    stdin = stdout = VCP_Init();
+#endif
+
+    fdev_set_udata(stdout, (void *)true);
+
+    printf_P(PSTR("Booting\n"));
+
+    CLI_Init();
+
+    RfRx_Init(); // This is important as it shares timer with Sys_Idle
+    IO_Init();
+
+//    mini_task();
+
+
+    Relay_Init();
+    
+    Init_ThermalZones();
+    
+    
+#ifdef LED_A_PORT
+    LED_ON( LED_A );
+#endif
+#ifdef LED_B_PORT
+    LED_ON( LED_B );
+#endif
+
+    ADC_Init();
+
+
+#ifdef LCD_DATA_PORT
+    lcd_gpio_init();
+#else
+    twi_init();
+#endif
+    lcd_init();
+
+
+//    RfTx_Init();
+    
+    Flame_Init();
+
+    EEConfig_Load();
+    
+    sei();
+
+    int seq = 0, ping = 0;
+    int hid_time = 0;
+    int hid_force = 0;
+
+
+    for(;;)
+    {
+        Sys_Idle();
+
+        wdt_reset();
+        
+#if defined(USE_USB_VCP) || defined(USE_USB_HID)
+        USB_Task();        
+#endif
+
+        CLI_Task();
+
+
+        handle_led();
+
         RfRx_Task( on_rfrx_sensor_data );
         
-        handle_led();
-        
-        ++force_hid_reports_counter;
 
-        if(force_hid_reports_counter > FORCE_HID_REPORTS) {
-            force_hid_reports = 1;
-            force_hid_reports_counter = 0;
+        ++seq;
+        
+        if(seq > SEQ_TICKS) {
+            seq = 0;
+            fprintf(mqtt, "seq:%d\r\n", ping++);
         }
+        
         
         ADC_Task();
         
@@ -725,7 +625,9 @@ int main(void)
         Flame_Task();
 
         if(pstate != FlameData.state) {
+            mqtt_publish_P("flame/state", PSTR("%s"), state_name[FlameData.state]);
             lcd_reinit = 750/TICK_MS;
+            CLI_notify_P(PSTR("FLAME"), PSTR("state changed to %s"), state_name[FlameData.state]);
         }
         
 
@@ -736,18 +638,28 @@ int main(void)
         // Do zone outputs :O
         Update_Outputs();
         
-        if(hid_enabled) {
+        if(hid_force++ > HID_FORCE) {
+            force_hid_reports = true;
+            hid_force = 0;
+        }
+
+        if(hid_time++ > HID_TIME) {
+
             do_hid_report_03();
             do_hid_report_04();
-        
-            force_hid_reports = 0;
+            
+            force_hid_reports = false;
+            hid_force = 0;
+            hid_time = 0;
         }
         
-        Sys_Idle();
+        mqtt_task(&on_mqtt_msg);
+        
+
     }
 }
 
-
+//#if defined(USE_USB_HID)
 void do_hid_report_03()
 {
 // HID stuff, report 03, general state
@@ -795,9 +707,14 @@ void do_hid_report_03()
     }
     
     if(force_hid_reports || memcmp(&report, &prev_report, sizeof(report))) {
+        mqtt_hid(0x03, (uint8_t *) &report, sizeof(report));
+#if defined(USE_USB_HID)
         if(HID_Report(0x03, &report, sizeof(report))) {
             memcpy(&prev_report, &report, sizeof(report));
         }
+#endif
+
+        memcpy(&prev_report, &report, sizeof(report));
     }
 }
 
@@ -809,9 +726,14 @@ void send_hid_report_04_if_changed(HID_WOB_Report_04_t *report)
         return;
     }
     if(force_hid_reports || memcmp(report, &prev_report[report->Zone], sizeof(*report))) {
+        mqtt_hid(0x04, (uint8_t *) report, sizeof(*report));
+#if defined(USE_USB_HID)
         if(HID_Report(0x04, report, sizeof(*report))) {
             memcpy(&prev_report[report->Zone], report, sizeof(prev_report[report->Zone]));
         }
+#endif
+
+        memcpy(&prev_report[report->Zone], report, sizeof(prev_report[report->Zone]));
     }
 }
 
@@ -837,43 +759,35 @@ void do_hid_report_04()
 
 void on_rfrx_sensor_data(struct RfRx_SensorData *data)
 {
-    uint16_t sensor_id = (data->channel << 8) | data->sensor_id;
-
-    int t_int = data->temp / 10;
-    unsigned t_frac = abs(data->temp % 10);
-    
-    char raw[11];
-    static const char *hex = "0123456789abcdef";
-    
-    for(int j = 0, i = 0; i < 5; ++i) { // 5 raw bytes
-      uint8_t d = data->_raw[i];
-      raw[j++] = hex[d >> 4];
-      raw[j++] = hex[d & 0x0f];
-    }
-    
-    raw[10] = 0;
+//    uint16_t sensor_id = (data->channel << 8) | data->sensor_id;
 
     HID_RfRx_Report_02_t report;
     report.SensorGUID = cpu_to_le16( (data->channel << 8) | data->sensor_id );
     report.Temperature = cpu_to_le16( data->temp );
     report.Humidity = data->humidity;
     report.Battery = data->battery ? 100 : 10;
-    
-    if(hid_enabled) {
-        HID_Report(0x02, &report, sizeof(report));
-    }
 
-    if(monitor_mode) {
-        printf_P(PSTR("{\"signal\":\"%u/%u\",\"batt\":%u,\"sensor_id\":%u,\"temperature\":%d.%u,\"t_%u\":\"%d.%u\",\"humidity\": %u, \"raw\": \"%s\"}\r\n"), data->_matching, data->_samples, data->battery, sensor_id , t_int, t_frac,  sensor_id, t_int, t_frac, data->humidity, raw);
-    }
+#if defined(USE_USB_HID)
+    HID_Report(0x02, &report, sizeof(report));
+#endif // USE_USB_HID
+    mqtt_hid(0x02, (uint8_t *) &report, sizeof(report));
+
+    char topic[16];
+    snprintf_P(topic, sizeof(topic), PSTR("rfrx/%u.%u"), data->sensor_id, data->channel);
+    
+    mqtt_publish_P(topic, PSTR("{\"id\":\"%u\",\"battery\":\"%u\",\"channel\":\"%u\", \"humidity\":\"%u\", \"temperature\":\"%.1f\", \"score\":\"%u\", \"packet\":\"%02X %02X %02X %02X %1X\"}"),
+                                         data->sensor_id, data->battery, data->channel, data->humidity, (float)data->temp/ 10, data->_matching, data->_raw[0], data->_raw[1], data->_raw[2], data->_raw[3], data->_raw[4] >> 4);
 
     Zones_SetCurrent(SENSOR_RFRX, report.SensorGUID, report.Temperature);
+    
+    CLI_notify_P(PSTR("RFRX"), PSTR("guid %u id %u channel %u temp %.1f"), report.SensorGUID, data->sensor_id, data->channel, (float)data->temp/ 10);
 }
 
 #ifdef USE_USB_VCP
 
 void EVENT_VCP_SetLineEncoding(CDC_LineEncoding_t *LineEncoding)
 {
+//    mqtt_publish_P("vcp/setlineencoding", PSTR("{\"baud\": \"%lu\" }"), LineEncoding->BaudRateBPS);
 }
 
 
@@ -883,15 +797,18 @@ void EVENT_VCP_DataReceived()
 
 void EVENT_VCP_SetControlLineState(uint16_t State)
 {
-  if(State & CDC_CONTROL_LINE_OUT_RTS)
-  {
-
-  }
-  else
-  {
-
-  }
+  // ESP8266:
+  // DTR -> RESET
+  // RTS -> GPIO0
+  //
+//  mqtt_publish_P("vcp/setcontrollinestate", PSTR("{\"state\": \"%04x\", \"dtr\":\"%u\", \"rts\":\"%u\" }"), State, State & CDC_CONTROL_LINE_OUT_DTR ? 1 : 0, State & CDC_CONTROL_LINE_OUT_RTS ? 1 : 0);
 }
 
+static void on_mqtt_msg(const char *topic, const char *msg)
+{
+    CLI_Erase();
+    printf_P(PSTR("on_mqtt_msg: topic=%s msg=%s\n"), topic, msg);
+    CLI_Redraw();
+}
 
 #endif /* USE_USB_VCP */

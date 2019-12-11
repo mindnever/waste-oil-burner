@@ -3,6 +3,18 @@
 
 #include "io.h"
 
+// UART
+#define UART_RX_PORT D
+#define UART_RX_PIN 2
+
+#define UART_TX_PORT D
+#define UART_TX_PIN 3
+
+
+// RFTX module
+//#define TX_DATA_PORT D
+//#define TX_DATA_PIN 3
+
 // RXB6 module
 
 #define RX_DATA_PORT D
@@ -30,17 +42,13 @@
 #define SENSOR_C_ADCMUX 7
 #define SENSOR_C_DIDR0 7
 
-// reset button (PF6, PROMICRO A1)
-#define BUTTON_A_PORT F
-#define BUTTON_A_PIN 6
-
 // external thermostat trigger (PB2, PROMICRO MOSI, D16)
 #define BUTTON_B_PORT B
 #define BUTTON_B_PIN 2
 
 // rotary encoder button
-#define BUTTON_R_PORT D
-#define BUTTON_R_PIN 2
+#define BUTTON_R_PORT F
+#define BUTTON_R_PIN 6
 
 // rotary encoder A & B
 #define ENCODER_A_PORT B

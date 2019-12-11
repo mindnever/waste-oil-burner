@@ -46,7 +46,7 @@
  *  the device will send, and what it may be sent back from the host. Refer to the HID specification for
  *  more details on HID report descriptors.
  */
-
+#if defined(USE_USB_HID)
 const USB_Descriptor_HIDReport_Datatype_t PROGMEM SensorReportDescriptor[] =
 {
         HID_RI_USAGE_PAGE(16, 0xFF00), /* Vendor defined Page */
@@ -78,6 +78,7 @@ const USB_Descriptor_HIDReport_Datatype_t PROGMEM SensorReportDescriptor[] =
 
         HID_RI_END_COLLECTION(0),
 };
+#endif
 
 /** Device descriptor structure. This descriptor, located in FLASH memory, describes the overall
  *  device characteristics, including the supported USB version, control endpoint size and the
@@ -230,6 +231,7 @@ const USB_Descriptor_Configuration_t PROGMEM ConfigurationDescriptor =
 			.PollingIntervalMS      = 0x05
 		},
 
+#if defined(USE_USB_HID)
     .HID_Interface =
         {
             .Header                 = {.Size = sizeof(USB_Descriptor_Interface_t), .Type = DTYPE_Interface},
@@ -266,6 +268,8 @@ const USB_Descriptor_Configuration_t PROGMEM ConfigurationDescriptor =
             .EndpointSize           = SENSOR_EPSIZE,
             .PollingIntervalMS      = 0x05
         }
+#endif /* USE_USB_HID */
+
 };
 
 /** Language descriptor structure. This descriptor, located in FLASH memory, is returned when the host requests
@@ -330,6 +334,7 @@ uint16_t CALLBACK_USB_GetDescriptor(const uint16_t wValue,
 			}
 
 			break;
+#if defined(USE_USB_HID)
         case HID_DTYPE_HID:
             Address = &ConfigurationDescriptor.HID_SensorHID;
             Size    = sizeof(USB_HID_Descriptor_HID_t);
@@ -338,6 +343,8 @@ uint16_t CALLBACK_USB_GetDescriptor(const uint16_t wValue,
             Address = &SensorReportDescriptor;
             Size    = sizeof(SensorReportDescriptor);
             break;
+#endif
+
 	}
 
 	*DescriptorAddress = Address;

@@ -7,7 +7,7 @@
 #include "hid.h"
 #include "vcp.h"
 #include "hw.h"
-
+#include "mqtt.h"
 
 static ThermalZone Zones[ NUM_ZONES ];
 
@@ -30,27 +30,20 @@ void Zones_Init(void)
 
 void Zones_SetCurrent(sensor_type_t type, uint16_t id, int16_t current)
 {
-    uint16_t rfrx_id = id;
-    
     for(uint8_t i = 0; i < _WOB_REPORT_ZONE_COUNT; ++i) {
         ThermalZone *zone = Zones_GetZone(i);
         if(!zone) { continue; }// how can this be? cannot..
         
-        rfrx_id = id;
-        
-        if((zone->Config.SensorType == SENSOR_RFRX)
-            && (zone->Config.SensorID <= 3)) { // check just channel ID, ignore sensor id
-            rfrx_id = id >> 8;
-        } else {
-            rfrx_id = id;
+        if(zone->Config.SensorType != type) {
+            continue;
         }
         
-        
-        if((zone->Config.SensorType == type)
-        && ((type != SENSOR_RFRX) || (rfrx_id == zone->Config.SensorID))) {
-            zone->Current = current;
-            zone->Valid = CURRENT_VALID;
+        if(zone->Config.SensorID != id) {
+            continue;
         }
+        
+        zone->Current = current;
+        zone->Valid = CURRENT_VALID;
     }
 }
 
@@ -90,26 +83,20 @@ void Zones_DumpZone(enum ZoneID id, ThermalZone *zone)
         case SENSOR_NONE:
             printf_P(PSTR("none"));
             break;
-        case SENSOR_ANALOG1:
-            printf_P(PSTR("analog 1"));
-            break;
-        case SENSOR_ANALOG2:
-            printf_P(PSTR("analog 2"));
-            break;
-        case SENSOR_ANALOG3:
-            printf_P(PSTR("analog 3"));
+        case SENSOR_ANALOG:
+            printf_P(PSTR("analog %u"), zone->Config.SensorID);
             break;
         case SENSOR_BINARY:
             printf_P(PSTR("binary (BUTTON_B)"));
             break;
         case SENSOR_RFRX:
-            printf_P(PSTR("RFRX sensor_id=%u"), zone->Config.SensorID);
+            printf_P(PSTR("rfrx %u"), zone->Config.SensorID);
             break;
         default:
             printf_P(PSTR("unknown"));
     }
     
-    printf_P(PSTR("\r\n"));
+    printf_P(PSTR("\n"));
 }
 
 ThermalZone *Zones_GetZone(enum ZoneID id)
@@ -122,52 +109,41 @@ ThermalZone *Zones_GetZone(enum ZoneID id)
 
 void Zones_ZoneCLI(ThermalZone *zone, int argc, const char * const *argv)
 {
-    if(!strcasecmp(argv[0], "enable")) {
+    if(!strcasecmp_P(argv[0], PSTR("enable"))) {
         zone->Config.Enabled = true;
-    } else if(!strcasecmp(argv[0], "disable")) {
+    } else if(!strcasecmp_P(argv[0], PSTR("disable"))) {
         zone->Config.Enabled = false;
-    } else if(!strcasecmp(argv[0], "setpoint")) {
+    } else if(!strcasecmp_P(argv[0], PSTR("setpoint"))) {
         if(argc > 1) {
             zone->Config.SetPoint = atof(argv[1]) * 10;
         }
-    } else if(!strcasecmp(argv[0], "sensor")) {
+    } else if(!strcasecmp_P(argv[0], PSTR("sensor"))) {
         if(argc > 1) {
-            if(!strcasecmp(argv[1], "none")) {
+            if(!strcasecmp_P(argv[1], PSTR("none"))) {
                 zone->Config.SensorType = SENSOR_NONE;
-            } else if(!strcasecmp(argv[1], "analog")) {
-            
+            } else if(!strcasecmp_P(argv[1], PSTR("analog"))) {
                 if(argc > 2) {
-                    switch(atoi(argv[2])) {
-                        case 1:
-                            zone->Config.SensorType = SENSOR_ANALOG1;
-                            break;
-                        case 2:
-                            zone->Config.SensorType = SENSOR_ANALOG2;
-                            break;
-                        case 3:
-                            zone->Config.SensorType = SENSOR_ANALOG2;
-                            break;
-                        default:
-                            ;
-                    }
+                    zone->Config.SensorType = SENSOR_ANALOG;
+                    zone->Config.SensorID = atoi(argv[2]);
                 }
-            } else if(!strcasecmp(argv[1], "binary")) {
+            } else if(!strcasecmp_P(argv[1], PSTR("binary"))) {
                 zone->Config.SensorType = SENSOR_BINARY;
-            } else if(!strcasecmp(argv[1], "rfrx")) {
+                zone->Config.SensorID = 0;
+            } else if(!strcasecmp_P(argv[1], PSTR("rfrx"))) {
                 if(argc > 2) {
                     zone->Config.SensorType = SENSOR_RFRX;
                     zone->Config.SensorID = atoi(argv[2]);
                 }
             } else {
-                printf_P(PSTR("unknown zone sensor type '%s'\r\n"), argv[1]);
+                printf_P(PSTR("??? '%s'\n"), argv[1]);
             }
         }
-    } else if(!strcasecmp(argv[0], "hysteresis")) {
+    } else if(!strcasecmp_P(argv[0], PSTR("hysteresis"))) {
         if(argc > 1) {
             zone->Config.Hysteresis = atof(argv[1]) * 10;
         }
     } else {
-        printf_P(PSTR("unknown zone command '%s'\r\n"), argv[0]);
+        printf_P(PSTR("??? '%s'\n"), argv[0]);
     }
 }
 

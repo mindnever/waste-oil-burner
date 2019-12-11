@@ -188,24 +188,24 @@ const char *Relay_Name(enum RelayID id)
 void Relay_CLI(int argc, const char * const *argv)
 {
     if(argc == 0) {
-        printf_P(PSTR("relay command missing op\r\n"));
+        printf_P(PSTR("relay command missing op\n"));
         return;
     }
 
-    if(!strcasecmp(argv[0], "print")) {
+    if(!strcasecmp_P(argv[0], PSTR("print"))) {
         for(enum RelayID id = _RELAY_FIRST; id < _NRELAYS; ++id) {
-            printf_P(RelayConfiguration.K[id] ? PSTR("%10s - %3s - k%u\r\n") : PSTR("%10s - %3s - none\r\n"), names[id], Relay_State(id) ? "on" : "off", RelayConfiguration.K[id]);
+            printf_P(RelayConfiguration.K[id] ? PSTR("%10s - %3s - k%u\n") : PSTR("%10s - %3s - none\n"), names[id], Relay_State(id) ? "on" : "off", RelayConfiguration.K[id]);
         }
     } else {
         for(enum RelayID id = _RELAY_FIRST; id < _NRELAYS; ++id) {
             if(!strcasecmp(argv[0], names[id])) {
                 if(argc > 1) {
-                    if(!strcasecmp(argv[1], "none")) {
+                    if(!strcasecmp_P(argv[1], PSTR("none"))) {
                         RelayConfiguration.K[id] = 0;
                     } else if((argv[1][0] == 'k' || argv[1][0] == 'K') && isdigit(argv[1][1])) {
                         RelayConfiguration.K[id] = atoi(argv[1] + 1);
                     } else {
-                        printf_P(PSTR("unknown relay output '%s'\r\n"), argv[1]);
+                        printf_P(PSTR("unknown relay output '%s'\n"), argv[1]);
                     }
 
                     // sanity check

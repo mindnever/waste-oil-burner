@@ -1,7 +1,10 @@
+#include <avr/pgmspace.h>
 #include <avr/io.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 #include "adc.h"
-
+#include "eeconfig.h"
 #include "zones.h"
 #include "flame.h"
 #include "hw.h"
@@ -9,28 +12,46 @@
 // analog sensor
 #define DEFAULT_ANALOG_SENSOR_GAIN -0.001958311
 #define DEFAULT_ANALOG_SENSOR_OFFSET 129.5639
-
+#define DEFAULT_ANALOG_SENSOR_FILTER 0
 
 AnalogSensorConfiguration ADC_Config = {
     .Calibration = {
         [ 0 ] = {
             .gain = DEFAULT_ANALOG_SENSOR_GAIN,
             .offset = DEFAULT_ANALOG_SENSOR_OFFSET,
+            .filter = DEFAULT_ANALOG_SENSOR_FILTER,
         },
         [ 1 ] = {
             .gain = DEFAULT_ANALOG_SENSOR_GAIN,
             .offset = DEFAULT_ANALOG_SENSOR_OFFSET,
+            .filter = DEFAULT_ANALOG_SENSOR_FILTER,
         },
         [ 2 ] = {
             .gain = DEFAULT_ANALOG_SENSOR_GAIN,
             .offset = DEFAULT_ANALOG_SENSOR_OFFSET,
+            .filter = DEFAULT_ANALOG_SENSOR_FILTER,
         },
     }
 };
 
-static void ADC_Mux(uint8_t mux)
+static const PROGMEM uint8_t mux_map[NUM_ANALOG_SENSORS + 1] = {
+#ifdef SENSOR_A_ADCMUX
+    [0] = SENSOR_A_ADCMUX,
+#endif
+#ifdef SENSOR_B_ADCMUX
+    [1] = SENSOR_B_ADCMUX,
+#endif    
+#ifdef SENSOR_C_ADCMUX
+    [2] = SENSOR_C_ADCMUX,
+#endif    
+#ifdef SENSOR_D_ADCMUX
+    [3] = SENSOR_D_ADCMUX,
+#endif    
+};
+
+static void ADC_Mux(uint8_t sensor)
 {
-    ADMUX = _BV( REFS0 ) | _BV( ADLAR ) | mux;
+    ADMUX = _BV( REFS0 ) | _BV( ADLAR ) | pgm_read_byte(&mux_map[sensor]);
 }
 
 
@@ -58,7 +79,7 @@ void ADC_Init(void)
     
     // setup ADC, ADMUX input to ADC6, Vref = AVcc, start , 125khz clock
     // free running mode
-    ADC_Mux( IO_ADCMUX( SENSOR_A ) );
+    ADC_Mux( 0 );
     
     ADCSRA = _BV( ADEN ) | _BV( ADSC ) | _BV( ADPS0 ) | _BV( ADPS1 ) | _BV( ADPS2 ) | _BV( ADATE );
     
@@ -86,38 +107,60 @@ void ADC_Task(void)
     static int sensor = 0;
     
     uint16_t value = ADC;
-    
-    raw_adc[sensor] = value;
 
-    switch(sensor) {
-        case 0:
-            FlameData.sensor = value; // flame
-#ifdef SENSOR_B_ADCMUX
-            ADC_Mux( IO_ADCMUX( SENSOR_B ) ); // next
-#endif
-            break;
-        case 1:
-            Zones_SetCurrent(SENSOR_ANALOG1, 0, (ADC_Config.Calibration[0].gain * value + ADC_Config.Calibration[0].offset) * 10);
-#ifdef SENSOR_C_ADCMUX
-            ADC_Mux( IO_ADCMUX( SENSOR_C ) ); // next
-#endif
-            break;
-        case 2:
-            Zones_SetCurrent(SENSOR_ANALOG2, 0, (ADC_Config.Calibration[1].gain * value + ADC_Config.Calibration[1].offset) * 10);
-#ifdef SENSOR_D_ADCMUX
-            ADC_Mux( IO_ADCMUX( SENSOR_D ) ); // next
-#endif
-            break;
-        case 3:
-            Zones_SetCurrent(SENSOR_ANALOG3, 0, (ADC_Config.Calibration[2].gain * value + ADC_Config.Calibration[2].offset) * 10);
-#ifdef SENSOR_A_ADCMUX
-            ADC_Mux( IO_ADCMUX( SENSOR_A ) ); // next
-#endif
-            break;
+    float filter = sensor ? ADC_Config.Calibration[sensor - 1].filter : FlameConfiguration.flame_lpf;
+    
+    raw_adc[sensor] = (1.0f - filter) * value + filter * raw_adc[sensor];
+
+    if(sensor == 0) {
+            FlameData.sensor = raw_adc[sensor]; // flame
+    } else {
+            Zones_SetCurrent(SENSOR_ANALOG, sensor, (ADC_Config.Calibration[sensor - 1].gain * raw_adc[sensor] + ADC_Config.Calibration[sensor - 1].offset) * 10);
     }
 
     ++sensor;
     if(sensor > NUM_ANALOG_SENSORS) {
         sensor = 0;
+    }
+    
+    ADC_Mux(sensor);
+}
+
+void ADC_CLI(int argc, const char * const *argv)
+{
+    if(argc == 0) {
+        return;
+    }
+
+    if(!strcasecmp_P(argv[0], PSTR("print"))) {
+        // print analog calibration
+        for(unsigned index = 0; index < NUM_ANALOG_SENSORS; ++index) {
+            printf_P(PSTR("analog %u gain %f offset %f lpf %f raw %u\n"), index + 1, ADC_Config.Calibration[index].gain, ADC_Config.Calibration[index].offset, ADC_Config.Calibration[index].filter, raw_adc[index + 1]);
+        }
+    } else {
+        if(argc >= 3) {
+            unsigned index = atoi(argv[0]);
+            if(index >= 1 && index <= NUM_ANALOG_SENSORS) {
+                --index;
+                float val = atof(argv[2]);
+                if(!strcasecmp_P(argv[1], PSTR("gain"))) {
+                    ADC_Config.Calibration[index].gain = val;
+                } else if(!strcasecmp_P(argv[1], PSTR("offset"))) {
+                    ADC_Config.Calibration[index].offset = val;
+                } else if(!strcasecmp_P(argv[1], PSTR("lpf"))) {
+                    ADC_Config.Calibration[index].filter = val;
+                } else {
+                    printf_P(PSTR("??? '%s'\n"), argv[1]);
+                }
+                
+                EEConfig_Save();
+                
+            } else {
+                printf_P(PSTR("??? id\n"));
+            }
+            
+        } else {
+            
+        }
     }
 }
