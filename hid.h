@@ -27,6 +27,10 @@ typedef struct
 #define WOB_REPORT_OUTPUT_FAN	 (1 << 1)
 #define WOB_REPORT_OUTPUT_AIR    (1 << 2)
 #define WOB_REPORT_OUTPUT_SPARK  (1 << 3)
+#define WOB_REPORT_OUTPUT_EXT1   (1 << 4)
+#define WOB_REPORT_OUTPUT_EXT2   (1 << 5)
+#define WOB_REPORT_OUTPUT_EXT3   (1 << 6)
+#define WOB_REPORT_OUTPUT_EXT4   (1 << 7)
 
 typedef struct
 {

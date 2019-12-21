@@ -73,15 +73,42 @@ static void CLI_Dfu()
     }
 }
 
+extern uint8_t mcusr_save;
 
+// MCUSR: USBRF, JTRF, WDRF, BORF, EXTRF, PORF
 
 static void CLI_Info()
 {
-    printf_P(PSTR("CPU: %.1f%%\nUptime: %lu\nStack: %u\n"), 100.0 - (((float)sys_busy_ticks / (float)sys_idle_ticks) * 100), sys_millis / 1000, StackCount());
+    char mcusr_str[32];
+    
+    mcusr_str[0] = 0;
+#if 0    
+    if(mcusr_save & _BV(USBRF)) {
+        strcat_P(mcusr_str, PSTR(" USB"));
+    }
+#endif
+    if(mcusr_save & _BV(WDRF)) {
+        strcat_P(mcusr_str, PSTR(" WDR"));
+    }
+    if(mcusr_save & _BV(JTRF)) {
+        strcat_P(mcusr_str, PSTR(" JTAG"));
+    }
+    if(mcusr_save & _BV(BORF)) {
+        strcat_P(mcusr_str, PSTR(" BOR"));
+    }
+    if(mcusr_save & _BV(EXTRF)) {
+        strcat_P(mcusr_str, PSTR(" EXT"));
+    }
+    if(mcusr_save & _BV(PORF)) {
+        strcat_P(mcusr_str, PSTR(" POR"));
+    }
+    
+    
+    printf_P(PSTR("Up: %lu\nStack: %u\nmcusr: (%02x) %s\n"), sys_millis / 1000, StackCount(), mcusr_save, mcusr_str);
     uint16_t bootloader_signature = pgm_read_word_near( BOOTLOADER_MAGIC_SIGNATURE_START );
     printf_P(PSTR("bl_sig: %02x\n"), bootloader_signature);
     if(bootloader_signature != BOOTLOADER_MAGIC_SIGNATURE) {
-        printf_P(PSTR("Unknown bootloader\n"));
+//        printf_P(PSTR("Unknown bootloader\n"));
         return;
     }
     uint16_t bootloader_class = pgm_read_word_near( BOOTLOADER_CLASS_SIGNATURE_START );
@@ -98,8 +125,16 @@ static int CLI_Execute(int argc, const char * const *argv)
 {
     printf_P(PSTR("\n"));
 
-    if(!strcasecmp_P(argv[0], PSTR("tx"))) {
-//        RfTx_Transmit((const uint8_t *) "\xff\xa0\x28\xf1\0", 5, 10);
+    if(!strcasecmp_P(argv[0], PSTR("eeprom"))) {
+        if(argc > 1) {
+            if(!strcasecmp_P(argv[1], PSTR("format"))) {
+                EEConfig_Format();
+            } else if(!strcasecmp_P(argv[1], PSTR("backup"))) {
+                EEConfig_Backup();
+            } else if(!strcasecmp_P(argv[1], PSTR("restore"))) {
+                EEConfig_Restore();
+            }
+        }
 #if defined(USE_USB_HID)
     } else if(!strcasecmp_P(argv[0], PSTR("hid"))) {
         if(argc > 1) {
@@ -111,12 +146,10 @@ static int CLI_Execute(int argc, const char * const *argv)
         }
         printf_P(PSTR("HID reporting is %s\n"), hid_enabled ? "on" : "off");
 #endif
-    } else if(!strcasecmp_P(argv[0], PSTR("eeprom")) && (argc > 1) && !strcasecmp_P(argv[1], PSTR("format"))) {
-        EEConfig_Format();
     } else if(!strcasecmp_P(argv[0], PSTR("info"))) {
         CLI_Info();
-    } else if(!strcasecmp_P(argv[0], PSTR("uart")) || !strcasecmp_P(argv[0], PSTR("usart"))) {
-        USART_CLI(argc - 1, argv + 1);
+//    } else if(!strcasecmp_P(argv[0], PSTR("uart")) || !strcasecmp_P(argv[0], PSTR("usart"))) {
+//        USART_CLI(argc - 1, argv + 1);
     } else if(!strcasecmp_P(argv[0], PSTR("dfu"))) {
         CLI_Dfu();
     } else if(!strcasecmp_P(argv[0], PSTR("analog"))) {

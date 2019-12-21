@@ -14,6 +14,9 @@
 #include <string.h>
 
 #define EELAYOUT_VERSION 7
+#define EELAYOUT_CONFIG_SLOT	0
+#define EELAYOUT_BACKUP_SLOT	1
+
 
 struct EELayout {
     uint8_t  Version;
@@ -24,13 +27,27 @@ struct EELayout {
     RelayConfig R_Config;
 };
 
-static EEMEM struct EELayout eevars;
+static EEMEM struct EELayout eevars[2];
 
-void EEConfig_Load(void)
+static void EEConfig_Save_Slot(uint8_t slot);
+static void EEConfig_Load_Slot(uint8_t slot);
+
+void EEConfig_Load()
+{
+    EEConfig_Load_Slot(EELAYOUT_CONFIG_SLOT);
+}
+
+void EEConfig_Restore()
+{
+    EEConfig_Load_Slot(EELAYOUT_BACKUP_SLOT);
+    EEConfig_Save_Slot(EELAYOUT_CONFIG_SLOT);
+}
+
+void EEConfig_Load_Slot(uint8_t slot)
 {
     struct EELayout buffer;
     
-    eeprom_read_block(&buffer, &eevars, sizeof(buffer));
+    eeprom_read_block(&buffer, &eevars[slot], sizeof(buffer));
 
     if(buffer.Version != EELAYOUT_VERSION) {
         return;
@@ -63,11 +80,23 @@ void EEConfig_Load(void)
     memcpy(&RelayConfiguration, &buffer.R_Config, sizeof(RelayConfiguration));
 }
 
-void EEConfig_Save(void)
+void EEConfig_Save()
+{
+    EEConfig_Save_Slot(EELAYOUT_CONFIG_SLOT);
+}
+
+void EEConfig_Backup()
+{
+    EEConfig_Save_Slot(EELAYOUT_BACKUP_SLOT);
+}
+
+void EEConfig_Save_Slot(uint8_t slot)
 {
     struct EELayout buffer;
     buffer.Version = EELAYOUT_VERSION;
     buffer.CRC = 123;
+
+    printf_P(PSTR("EEConfig_Save()\n"));
 
     for(uint8_t i = 0; i < NUM_ZONES; ++i) {
         ThermalZone *zone = Zones_GetZone(i);
@@ -88,10 +117,10 @@ void EEConfig_Save(void)
     
     buffer.CRC = crc;
     
-    eeprom_write_block(&buffer, &eevars, sizeof(buffer));
+    eeprom_write_block(&buffer, &eevars[slot], sizeof(buffer));
 }
 
 void EEConfig_Format(void)
 {
-    eeprom_write_byte(&eevars.Version, 0);
+    eeprom_write_byte(&eevars[EELAYOUT_CONFIG_SLOT].Version, 0);
 }

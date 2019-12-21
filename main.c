@@ -61,6 +61,8 @@
 
 #define BUTTON_DEBOUNCE (30/TICK_MS)
 #define BUTTON_LONGPRESS (3000/TICK_MS)
+#define BUTTON_RESTORE (10000/TICK_MS)
+#define BUTTON_MAX 0xffff
 
 #define HID_TIME (750/TICK_MS)
 #define HID_FORCE (5000/TICK_MS)
@@ -92,6 +94,9 @@ typedef enum {
     UI_MODE_SET_EXT4,
     _UI_MODE_MAX,
 } ui_mode_t;
+
+
+uint8_t mcusr_save = 0;
 
 static uint16_t lcd_reinit = 0;
 
@@ -257,7 +262,7 @@ static void Button_Task()
 {
 #ifdef BUTTON_A_PORT
     if( !IO_PIN_READ( BUTTON_A ) ) {
-        if(button_a < BUTTON_LONGPRESS) {
+        if(button_a < BUTTON_MAX) {
             ++button_a;
         }
     } else {
@@ -271,7 +276,7 @@ static void Button_Task()
         
 #ifdef BUTTON_B_PORT
     if( !IO_PIN_READ( BUTTON_B ) ) {
-        if(button_b < BUTTON_LONGPRESS) {
+        if(button_b < BUTTON_MAX) {
             ++button_b;
         }
     } else {
@@ -283,7 +288,7 @@ static void Button_Task()
 
 #ifdef BUTTON_R_PORT
     if( !IO_PIN_READ( BUTTON_R ) ) {
-        if(button_r < BUTTON_LONGPRESS) {
+        if(button_r < BUTTON_MAX) {
             ++button_r;
         }
     } else {
@@ -292,6 +297,10 @@ static void Button_Task()
     
     if(IS_LONGPRESS(button_r)) {
         Flame_Reset();
+    }
+    if(button_r == BUTTON_RESTORE) {
+        printf_P(PSTR("button_r: %u\n"), button_r);
+        EEConfig_Restore();
     }
 #endif
 }
@@ -529,6 +538,9 @@ static void mini_task()
 
 int main(void)
 {
+    mcusr_save = MCUSR;
+    MCUSR = 0;
+    
     wdt_enable(WDTO_1S);
     
 #if defined(USE_USB_VCP) || defined(USE_USB_HID)
@@ -626,7 +638,6 @@ int main(void)
 
         if(pstate != FlameData.state) {
             mqtt_publish_P("flame/state", PSTR("%s"), state_name[FlameData.state]);
-            lcd_reinit = 750/TICK_MS;
             CLI_notify_P(PSTR("FLAME"), PSTR("state changed to %s"), state_name[FlameData.state]);
         }
         
@@ -705,6 +716,18 @@ void do_hid_report_03()
     if(Relay_State(RELAY_SPARK)) {
         report.Outputs |= WOB_REPORT_OUTPUT_SPARK;
     }
+    if(Zones_GetZone( ZONE_ID_EXT1 )->Active) {
+        report.Outputs |= WOB_REPORT_OUTPUT_EXT1;
+    }
+    if(Zones_GetZone( ZONE_ID_EXT2 )->Active) {
+        report.Outputs |= WOB_REPORT_OUTPUT_EXT2;
+    }
+    if(Zones_GetZone( ZONE_ID_EXT3 )->Active) {
+        report.Outputs |= WOB_REPORT_OUTPUT_EXT3;
+    }
+    if(Zones_GetZone( ZONE_ID_EXT4 )->Active) {
+        report.Outputs |= WOB_REPORT_OUTPUT_EXT4;
+    }
     
     if(force_hid_reports || memcmp(&report, &prev_report, sizeof(report))) {
         mqtt_hid(0x03, (uint8_t *) &report, sizeof(report));
@@ -775,8 +798,8 @@ void on_rfrx_sensor_data(struct RfRx_SensorData *data)
     char topic[16];
     snprintf_P(topic, sizeof(topic), PSTR("rfrx/%u.%u"), data->sensor_id, data->channel);
     
-    mqtt_publish_P(topic, PSTR("{\"id\":\"%u\",\"battery\":\"%u\",\"channel\":\"%u\", \"humidity\":\"%u\", \"temperature\":\"%.1f\", \"score\":\"%u\", \"packet\":\"%02X %02X %02X %02X %1X\"}"),
-                                         data->sensor_id, data->battery, data->channel, data->humidity, (float)data->temp/ 10, data->_matching, data->_raw[0], data->_raw[1], data->_raw[2], data->_raw[3], data->_raw[4] >> 4);
+    mqtt_publish_P(topic, PSTR("{\"id\":\"%u\",\"battery\":\"%u\",\"channel\":\"%u\", \"humidity\":\"%u\", \"temperature\":\"%.1f\", \"score\":\"%u\" }"),
+                                         data->sensor_id, data->battery, data->channel, data->humidity, (float)data->temp/ 10, data->_matching );
 
     Zones_SetCurrent(SENSOR_RFRX, report.SensorGUID, report.Temperature);
     
