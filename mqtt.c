@@ -17,9 +17,10 @@ FILE *mqtt;
 static char rx_buf[128];
 static uint8_t rx_pos = 0;
 
-
+#if 0
 static ThermalZone Zones[ NUM_ZONES ];
 static bool Relays[ _NRELAYS ];
+#endif
 
 static void mqtt_recv(mqtt_msg_callback_t on_msg);
 

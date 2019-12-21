@@ -60,7 +60,7 @@ void Zones_Update(uint8_t master_enable)
         if(!master_enable || !zone->Config.Enabled || !zone->Valid) {
             zone->Active = false;
         } else if(zone->Current < (zone->Config.SetPoint - (int16_t)zone->Config.Hysteresis)) {
-            zone->Active = true;;
+            zone->Active = true;
         } else if(zone->Current > zone->Config.SetPoint) {
             zone->Active = false;
         }
