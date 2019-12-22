@@ -7,7 +7,6 @@
 #include "vcp.h"
 #include "flame.h"
 #include "relay.h"
-#include "mqtt.h"
 
 #include <util/crc16.h>
 #include <avr/eeprom.h>

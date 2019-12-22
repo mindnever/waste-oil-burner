@@ -49,7 +49,7 @@ ISR (TIMER1_COMPB_vect)
     led_a = blink_on;
 
     if(tx_len == 0) {
-        TIMSK1 &= ~_BV(OCIE1B); // disable self
+        TIMSK1 &= ~_BV(OCIE1C); // disable self
         return;
     }
 
@@ -65,7 +65,7 @@ ISR (TIMER1_COMPB_vect)
     }
     
     if(tx_burst == 0) {
-        TIMSK1 &= ~_BV(OCIE1B); // disable self
+        TIMSK1 &= ~_BV(OCIE1C); // disable self
         return;
     }
     
@@ -74,19 +74,19 @@ ISR (TIMER1_COMPB_vect)
         IO_PIN_LOW( TX_DATA );
 
         if(tx_bit == BIT_SYNC) {
-            OCR1B += OCR_VAL( TIME_SYNC );
+            OCR1C += OCR_VAL( TIME_SYNC );
             tx_bit = BIT_FIRST;
         } else {
             if(tx_buffer[tx_pos] & (1 << tx_bit)) {
-                OCR1B += OCR_VAL( TIME_LONG );
+                OCR1C += OCR_VAL( TIME_LONG );
             } else {
-                OCR1B += OCR_VAL( TIME_SHORT );
+                OCR1C += OCR_VAL( TIME_SHORT );
             }
             --tx_bit;
         }
     } else {
         // if TX_DATA was already low, make it high and set timeout to TIME_LOW
-        OCR1B += OCR_VAL( TIME_LOW );
+        OCR1C += OCR_VAL( TIME_LOW );
         IO_PIN_HIGH( TX_DATA );
     }
 }
@@ -101,9 +101,9 @@ void RfTx_Transmit(const uint8_t *buffer, uint8_t len, uint8_t repeat)
         tx_bit = BIT_SYNC;
         tx_len = len;
         tx_burst = repeat;
-        OCR1B = TCNT1; // force irq?
-        TCCR1C |= _BV(FOC1B);
-        TIMSK1 |= _BV(OCIE1B); // enable interrupt
+        OCR1C = TCNT1; // force irq?
+        TCCR1C |= _BV(FOC1C);
+        TIMSK1 |= _BV(OCIE1C); // enable interrupt
     }
 #else
     (void)buffer;

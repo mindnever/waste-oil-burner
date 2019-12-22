@@ -12,6 +12,8 @@
 #include "hw.h"
 #include "hid.h"
 
+
+#ifdef USE_MQTT
 FILE *mqtt;
 
 static char rx_buf[128];
@@ -259,3 +261,4 @@ void mqtt_hid(int id, uint8_t *buffer, uint8_t size)
 
     mqtt_publish_P(topic, PSTR("%s"), hex);
 }
+#endif /* USE_MQTT */

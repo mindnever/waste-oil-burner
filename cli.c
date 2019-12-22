@@ -82,7 +82,7 @@ static void CLI_Info()
     char mcusr_str[32];
     
     mcusr_str[0] = 0;
-#if 0    
+#ifdef USBRF    
     if(mcusr_save & _BV(USBRF)) {
         strcat_P(mcusr_str, PSTR(" USB"));
     }
@@ -90,9 +90,11 @@ static void CLI_Info()
     if(mcusr_save & _BV(WDRF)) {
         strcat_P(mcusr_str, PSTR(" WDR"));
     }
+#ifdef JTRF
     if(mcusr_save & _BV(JTRF)) {
         strcat_P(mcusr_str, PSTR(" JTAG"));
     }
+#endif
     if(mcusr_save & _BV(BORF)) {
         strcat_P(mcusr_str, PSTR(" BOR"));
     }
@@ -159,8 +161,10 @@ static int CLI_Execute(int argc, const char * const *argv)
         Flame_CLI(argc - 1, argv + 1);
     } else if(!strcasecmp_P(argv[0], PSTR("relay"))) {
         Relay_CLI(argc - 1, argv + 1);
+#ifdef USE_MQTT
     } else if(!strcasecmp_P(argv[0], PSTR("mqtt"))) {
         mqtt_cli(argc - 1, argv + 1);
+#endif
     } else if(!strcasecmp_P(argv[0], PSTR("zone"))) {
         if(argc > 1) {
             if(!strcasecmp_P(argv[1], PSTR("print"))) {

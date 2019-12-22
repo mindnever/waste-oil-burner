@@ -40,7 +40,7 @@ LUFA_PATH = ../lufa-build
 LUFA_CFLAGS = -I$(LUFA_PATH) -DARCH=ARCH_AVR8 -DF_USB=$(F_CPU)UL -DUSE_LUFA_CONFIG_HEADER -I$(LUFA_PATH)/Config/
 LUFA_LIBS = $(LUFA_PATH)/obj/*.o
 
-DEFINES += -DUSE_USB_VCP
+DEFINES += -DUSE_USB_VCP -DUSE_MQTT
 
 else
 ifeq ($(BOARD),PROMINI)
@@ -51,7 +51,7 @@ RAM=2048
 F_CPU = 8000000
 AVRDUDE = avrdude -v -c arduino -p $(DEVICE) -P$(PORT) -b38400
 
-OBJECTS += usb_stubs.o lcd_gpio.o
+OBJECTS += lcd_gpio.o
 
 else
 ifeq ($(BOARD),UNO)

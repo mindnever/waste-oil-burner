@@ -7,7 +7,6 @@
 #include "hid.h"
 #include "vcp.h"
 #include "hw.h"
-#include "mqtt.h"
 
 static ThermalZone Zones[ NUM_ZONES ];
 

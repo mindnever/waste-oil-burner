@@ -58,12 +58,14 @@ uint32_t sys_millis;
 void Sys_Idle()
 {
   sys_millis += TICK_MS;
-  sys_busy_ticks = OCF1C - TCNT1;
-  while(!(TIFR1 & _BV(OCF1C))) {
+  sys_busy_ticks = OCF1B - TCNT1;
+  while(!(TIFR1 & _BV(OCF1B))) {
+#ifdef USE_MQTT
     mqtt_idle();
+#endif
   }
-  OCR1C += IDLE_TICKS;
-  TIFR1 |= _BV(OCF1C);
+  OCR1B += IDLE_TICKS;
+  TIFR1 |= _BV(OCF1B);
 }
 
 void RfRx_Init()
@@ -80,7 +82,7 @@ void RfRx_Init()
 
   TIMSK1 = _BV(ICIE1); // enable input capture interrupt
 
-  OCR1C = TCNT1 + IDLE_TICKS;
+  OCR1B = TCNT1 + IDLE_TICKS;
 }
 
 void RfRx_Task(RfRx_Callback cb)

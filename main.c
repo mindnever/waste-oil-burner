@@ -104,7 +104,9 @@ static ui_mode_t ui_mode = UI_MODE_STATUS;
 static uint8_t ui_refresh = 0;
 
 static void on_rfrx_sensor_data(struct RfRx_SensorData *data);
+#ifdef USE_MQTT
 static void on_mqtt_msg(const char *topic, const char *msg);
+#endif
 
 static void do_hid_report_03();
 static void do_hid_report_04();
@@ -547,8 +549,10 @@ int main(void)
     USB_Init();
 #endif
     
-    stdin = stdout = mqtt = USART_Init();
-
+    stdin = stdout = USART_Init();
+#ifdef USE_MQTT
+    mqtt = stdin;
+#endif
 #if defined(USE_USB_VCP)
     stdin = stdout = VCP_Init();
 #endif
@@ -619,14 +623,6 @@ int main(void)
         RfRx_Task( on_rfrx_sensor_data );
         
 
-        ++seq;
-        
-        if(seq > SEQ_TICKS) {
-            seq = 0;
-            fprintf(mqtt, "seq:%d\r\n", ping++);
-        }
-        
-        
         ADC_Task();
         
         UI_Task();
@@ -637,7 +633,9 @@ int main(void)
         Flame_Task();
 
         if(pstate != FlameData.state) {
+#ifdef USE_MQTT
             mqtt_publish_P("flame/state", PSTR("%s"), state_name[FlameData.state]);
+#endif
             CLI_notify_P(PSTR("FLAME"), PSTR("state changed to %s"), state_name[FlameData.state]);
         }
         
@@ -648,7 +646,7 @@ int main(void)
         
         // Do zone outputs :O
         Update_Outputs();
-        
+#if defined(USE_USB_HID) || defined(USE_MQTT)        
         if(hid_force++ > HID_FORCE) {
             force_hid_reports = true;
             hid_force = 0;
@@ -663,14 +661,23 @@ int main(void)
             hid_force = 0;
             hid_time = 0;
         }
-        
+#endif
+#ifdef USE_MQTT        
         mqtt_task(&on_mqtt_msg);
-        
+#endif        
 
     }
 }
+#ifdef USE_MQTT
+static void on_mqtt_msg(const char *topic, const char *msg)
+{
+    CLI_Erase();
+    printf_P(PSTR("on_mqtt_msg: topic=%s msg=%s\n"), topic, msg);
+    CLI_Redraw();
+}
+#endif
 
-//#if defined(USE_USB_HID)
+#if defined(USE_USB_HID) || defined(USE_MQTT)
 void do_hid_report_03()
 {
 // HID stuff, report 03, general state
@@ -730,7 +737,9 @@ void do_hid_report_03()
     }
     
     if(force_hid_reports || memcmp(&report, &prev_report, sizeof(report))) {
+#ifdef USE_MQTT
         mqtt_hid(0x03, (uint8_t *) &report, sizeof(report));
+#endif
 #if defined(USE_USB_HID)
         if(HID_Report(0x03, &report, sizeof(report))) {
             memcpy(&prev_report, &report, sizeof(report));
@@ -749,7 +758,9 @@ void send_hid_report_04_if_changed(HID_WOB_Report_04_t *report)
         return;
     }
     if(force_hid_reports || memcmp(report, &prev_report[report->Zone], sizeof(*report))) {
+#ifdef USE_MQTT
         mqtt_hid(0x04, (uint8_t *) report, sizeof(*report));
+#endif
 #if defined(USE_USB_HID)
         if(HID_Report(0x04, report, sizeof(*report))) {
             memcpy(&prev_report[report->Zone], report, sizeof(prev_report[report->Zone]));
@@ -779,6 +790,7 @@ void do_hid_report_04()
         send_hid_report_04_if_changed(&report);
     }
 }
+#endif /* USE_USB_HID || USE_MQTT */
 
 void on_rfrx_sensor_data(struct RfRx_SensorData *data)
 {
@@ -793,6 +805,7 @@ void on_rfrx_sensor_data(struct RfRx_SensorData *data)
 #if defined(USE_USB_HID)
     HID_Report(0x02, &report, sizeof(report));
 #endif // USE_USB_HID
+#if defined(USE_MQTT)
     mqtt_hid(0x02, (uint8_t *) &report, sizeof(report));
 
     char topic[16];
@@ -800,6 +813,7 @@ void on_rfrx_sensor_data(struct RfRx_SensorData *data)
     
     mqtt_publish_P(topic, PSTR("{\"id\":\"%u\",\"battery\":\"%u\",\"channel\":\"%u\", \"humidity\":\"%u\", \"temperature\":\"%.1f\", \"score\":\"%u\" }"),
                                          data->sensor_id, data->battery, data->channel, data->humidity, (float)data->temp/ 10, data->_matching );
+#endif
 
     Zones_SetCurrent(SENSOR_RFRX, report.SensorGUID, report.Temperature);
     
@@ -827,11 +841,5 @@ void EVENT_VCP_SetControlLineState(uint16_t State)
 //  mqtt_publish_P("vcp/setcontrollinestate", PSTR("{\"state\": \"%04x\", \"dtr\":\"%u\", \"rts\":\"%u\" }"), State, State & CDC_CONTROL_LINE_OUT_DTR ? 1 : 0, State & CDC_CONTROL_LINE_OUT_RTS ? 1 : 0);
 }
 
-static void on_mqtt_msg(const char *topic, const char *msg)
-{
-    CLI_Erase();
-    printf_P(PSTR("on_mqtt_msg: topic=%s msg=%s\n"), topic, msg);
-    CLI_Redraw();
-}
 
 #endif /* USE_USB_VCP */
