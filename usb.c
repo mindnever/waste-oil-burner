@@ -10,12 +10,12 @@
 
 void USB_Task()
 {
-  USB_USBTask();
+    USB_USBTask();
 #ifdef USE_USB_VCP
-  VCP_Task();
+    VCP_Task();
 #endif
 #ifdef USE_USB_HID
-  HID_Task();
+    HID_Task();
 #endif
 }
 
@@ -25,6 +25,7 @@ void USB_Task()
 void EVENT_USB_Device_ConfigurationChanged(void)
 {
     bool ConfigSuccess = true;
+
 #ifdef USE_USB_VCP
     ConfigSuccess &= VCP_EVENT_USB_Device_ConfigurationChanged();
 #endif
@@ -52,7 +53,6 @@ void EVENT_USB_Device_ControlRequest(void)
 void EVENT_USB_Device_StartOfFrame(void)
 {
 #ifdef USE_USB_HID
-  HID_EVENT_USB_Device_StartOfFrame();
+    HID_EVENT_USB_Device_StartOfFrame();
 #endif
 }
-

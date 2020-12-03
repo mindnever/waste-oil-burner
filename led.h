@@ -1,8 +1,7 @@
 #ifndef _WOB_LED_H_
 #define _WOB_LED_H_
 
-typedef enum
-{
+typedef enum {
     blink_off,
     blink_slow,
     blink_fast,

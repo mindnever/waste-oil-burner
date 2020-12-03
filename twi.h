@@ -20,7 +20,7 @@ int twi_read_bytes(uint8_t base, uint8_t addr, int len, uint8_t *buf);
 int twi_write_bytes(uint8_t base, uint8_t addr, int len, const uint8_t *buf);
 
 #ifdef __cplusplus
- } /* extern "C" */
+} /* extern "C" */
 #endif
 
 #endif /* _AVR_PROJECT_TWI_H_ */

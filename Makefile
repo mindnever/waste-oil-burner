@@ -22,7 +22,6 @@ endif
 BUILDDIR = build/$(BOARD)
 FW = $(BUILDDIR)/firmware
 
-TICK_MS = 10
 OBJECTS = main.o twi.o lcd.o rx.o led.o zones.o flame.o adc.o eeconfig.o relay.o fifo.o microrl/src/microrl.o usart.o mqtt.o cli.o
 
 ifeq ($(BOARD),PROMICRO)
@@ -68,7 +67,7 @@ endif
 endif
 endif
 
-DEFINES += -DF_CPU=$(F_CPU) -DBOARD=BOARD_$(BOARD) -DBOARD_PROMICRO=100 -DBOARD_PROMINI=101 -DTICK_MS=$(TICK_MS)
+DEFINES += -DF_CPU=$(F_CPU) -DBOARD=BOARD_$(BOARD) -DBOARD_PROMICRO=100 -DBOARD_PROMINI=101
 
 COMPILE = avr-gcc -Wall -Os -std=gnu99 -I. -mmcu=$(DEVICE) $(DEFINES) $(LUFA_CFLAGS) -ffunction-sections -fdata-sections -funsigned-char -funsigned-bitfields -fpack-struct -fshort-enums -ffreestanding
 LINK = avr-gcc $(LUFA_LIBS)  -Wl,--gc-sections -Wl,--relax -mmcu=$(DEVICE) -Wl,-u,vfprintf -lprintf_flt -lm

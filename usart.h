@@ -5,6 +5,6 @@
 
 FILE *USART_Init(void);
 
-void USART_CLI(int argc, const char * const *argv);
+void USART_CLI(int argc, const char *const *argv);
 
 #endif /* _WOB_USART_H_ */

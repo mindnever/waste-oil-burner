@@ -1,0 +1,46 @@
+Cli commands:
+
+analog print
+analog <id> gain <gain> offset <offset> lpf <lpf>
+
+dfu
+
+info
+
+eeprom format
+eeprom backup
+eeprom restore
+
+# analog print; flame print; relay print; zone print; mqtt print;
+eeprom dump
+
+flame print
+
+# reset state/exit fault mode
+flame reset
+
+flame fan_time <milliseconds>
+flame air_time <milliseconds>
+flame spark_time <milliseconds>
+flame detect_time <milliseconds>
+flame flame_time <milliseconds>
+flame flame_trig <number>
+flame flame_lpf <float>
+flame retry_count <count>
+flame manage_oil [yes|no]
+
+
+relay print
+relay [heater|fan|air|spark|zone_ext1|zone_ext2|zone_ext3|zone_ext4] [k1-8]
+
+
+zone print
+zone <id> [enable|disable]
+zone <id> setpoint <deg_C>
+zone <id> hysteresis <deg_C>
+zone <id> timeout <minutes>
+zone <id> sensor [none|analog <id>|button|rfrx <id>]
+
+# mqtt addon passthrough
+mqtt
+

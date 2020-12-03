@@ -12,15 +12,15 @@
 #include <avr/eeprom.h>
 #include <string.h>
 
-#define EELAYOUT_VERSION 7
-#define EELAYOUT_CONFIG_SLOT	0
-#define EELAYOUT_BACKUP_SLOT	1
+#define EELAYOUT_VERSION     7
+#define EELAYOUT_CONFIG_SLOT 0
+#define EELAYOUT_BACKUP_SLOT 1
 
 
 struct EELayout {
     uint8_t  Version;
     uint16_t CRC;
-    ThermalZoneConfiguration TZ_Config[NUM_ZONES];
+    ThermalZoneConfiguration  TZ_Config[NUM_ZONES];
     AnalogSensorConfiguration ADC_Config;
     struct FlameConfiguration F_Config;
     RelayConfig R_Config;
@@ -45,34 +45,37 @@ void EEConfig_Restore()
 void EEConfig_Load_Slot(uint8_t slot)
 {
     struct EELayout buffer;
-    
+
     eeprom_read_block(&buffer, &eevars[slot], sizeof(buffer));
 
-    if(buffer.Version != EELAYOUT_VERSION) {
+    if (buffer.Version != EELAYOUT_VERSION) {
         return;
     }
-    
+
     uint16_t ecrc = buffer.CRC;
+
     buffer.CRC = 123;
 
-    uint8_t *ptr = (uint8_t *) &buffer;
+    uint8_t *ptr = (uint8_t *)&buffer;
     uint16_t crc = 123;
-    
-    for(uint8_t i = 0; i < sizeof(buffer); ++i) {
+
+    for (uint8_t i = 0; i < sizeof(buffer); ++i) {
         crc = _crc16_update(crc, *ptr++);
     }
-    
-    if(ecrc != crc) {
-        printf_P(PSTR("EEConfig_Load() bad crc %u != %u\n"), ecrc, crc);
+
+    if (ecrc != crc) {
+        fputs_P(PSTR("cfg: bad crc\n"), stdout);
         return;
     }
-    
-    for(uint8_t i = 0; i < NUM_ZONES; ++i) {
+
+    for (uint8_t i = 0; i < NUM_ZONES; ++i) {
         ThermalZone *zone = Zones_GetZone(i);
-        if(!zone) { continue; }
+        if (!zone) {
+            continue;
+        }
         memcpy(&zone->Config, &buffer.TZ_Config[i], sizeof(buffer.TZ_Config[i]));
     }
-    
+
     memcpy(&ADC_Config, &buffer.ADC_Config, sizeof(ADC_Config));
 
     memcpy(&FlameConfiguration, &buffer.F_Config, sizeof(FlameConfiguration));
@@ -92,30 +95,33 @@ void EEConfig_Backup()
 void EEConfig_Save_Slot(uint8_t slot)
 {
     struct EELayout buffer;
+
     buffer.Version = EELAYOUT_VERSION;
-    buffer.CRC = 123;
+    buffer.CRC     = 123;
 
-    printf_P(PSTR("EEConfig_Save()\n"));
+    printf_P(PSTR("saving cfg...\n"));
 
-    for(uint8_t i = 0; i < NUM_ZONES; ++i) {
+    for (uint8_t i = 0; i < NUM_ZONES; ++i) {
         ThermalZone *zone = Zones_GetZone(i);
-        if(!zone) { continue; }
+        if (!zone) {
+            continue;
+        }
         memcpy(&buffer.TZ_Config[i], &zone->Config, sizeof(buffer.TZ_Config[i]));
     }
-    
+
     memcpy(&buffer.ADC_Config, &ADC_Config, sizeof(buffer.ADC_Config));
     memcpy(&buffer.F_Config, &FlameConfiguration, sizeof(buffer.F_Config));
     memcpy(&buffer.R_Config, &RelayConfiguration, sizeof(buffer.R_Config));
-    
-    uint8_t *ptr = (uint8_t *) &buffer;
+
+    uint8_t *ptr = (uint8_t *)&buffer;
     uint16_t crc = 123;
-    
-    for(uint8_t i = 0; i < sizeof(buffer); ++i) {
+
+    for (uint8_t i = 0; i < sizeof(buffer); ++i) {
         crc = _crc16_update(crc, *ptr++);
     }
-    
+
     buffer.CRC = crc;
-    
+
     eeprom_write_block(&buffer, &eevars[slot], sizeof(buffer));
 }
 

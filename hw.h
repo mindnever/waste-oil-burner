@@ -15,7 +15,9 @@
 
 #if defined(LCD_DATA_PORT)
 # define LCD_COMMAND_DELAY_US 39
-# define LCD_DATA_DELAY_US 43
+# define LCD_DATA_DELAY_US    43
 #endif
+
+#define TICK_MS               10
 
 #endif /* _WOB_HW_H_ */
