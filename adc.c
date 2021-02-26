@@ -100,6 +100,7 @@ void ADC_Init(void)
 }
 
 uint16_t raw_adc[NUM_ANALOG_SENSORS + 1];
+uint8_t valid_adc[NUM_ANALOG_SENSORS + 1];
 
 void ADC_Task(void)
 {
@@ -107,14 +108,19 @@ void ADC_Task(void)
 
     uint16_t value    = ADC;
 
-    float filter = sensor ? ADC_Config.Calibration[sensor - 1].filter : FlameConfiguration.flame_lpf;
+    valid_adc[sensor] = value > 10;
 
-    raw_adc[sensor] = (1.0f - filter) * value + filter * raw_adc[sensor];
+    if(valid_adc[sensor]) {
 
-    if (sensor == 0) {
-        FlameData.sensor = raw_adc[sensor]; // flame
-    } else {
-        Zones_SetCurrent(SENSOR_ANALOG, sensor, (ADC_Config.Calibration[sensor - 1].gain * raw_adc[sensor] + ADC_Config.Calibration[sensor - 1].offset) * 10);
+        float filter = sensor ? ADC_Config.Calibration[sensor - 1].filter : FlameConfiguration.flame_lpf;
+
+        raw_adc[sensor] = (1.0f - filter) * value + filter * raw_adc[sensor];
+
+        if (sensor == 0) {
+            FlameData.sensor = raw_adc[sensor]; // flame
+        } else {
+            Zones_SetCurrent(SENSOR_ANALOG, sensor, (ADC_Config.Calibration[sensor - 1].gain * raw_adc[sensor] + ADC_Config.Calibration[sensor - 1].offset) * 10);
+        }
     }
 
     ++sensor;
@@ -138,7 +144,7 @@ void ADC_CLI(int argc, const char *const *argv)
         }
     } else {
         unsigned index = atoi(argv[0]) - 1;
-        if (index > 0 && index < NUM_ANALOG_SENSORS) {
+        if ((index >= 0) && (index < NUM_ANALOG_SENSORS)) {
             --argc;
 
             for (int i = 1; i < argc; i += 2) {

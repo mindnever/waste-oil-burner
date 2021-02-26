@@ -15,7 +15,7 @@ typedef struct {
 
 extern AnalogSensorConfiguration ADC_Config;
 extern uint16_t raw_adc[NUM_ANALOG_SENSORS + 1];
-
+extern uint8_t valid_adc[NUM_ANALOG_SENSORS + 1];
 
 void ADC_Init(void);
 void ADC_Task(void);
