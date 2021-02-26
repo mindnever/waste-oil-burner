@@ -96,79 +96,79 @@
 #define USART_RX_FIFO_SIZE 254
 
 static struct {
-    fifo_t  fifo;
-    uint8_t _alloc[USART_RX_FIFO_SIZE];
+	fifo_t fifo;
+	uint8_t _alloc[USART_RX_FIFO_SIZE];
 } rx = {
-    .fifo     = {
-        .in   = 0,
-        .out  = 0,
-        .size = USART_RX_FIFO_SIZE,
-    }
+	.fifo     = {
+		.in   = 0,
+		.out  = 0,
+		.size = USART_RX_FIFO_SIZE,
+	}
 };
 
 ISR(ODDBG_RX_vect) {
-    uint8_t d = ODDBG_UDR;
+	uint8_t d = ODDBG_UDR;
 
-    fifo_write(&rx.fifo, &d, 1);
+	fifo_write(&rx.fifo, &d, 1);
 }
 
 static int usart_putchar(char c, FILE *stream)
 {
-    if (fdev_get_udata(stream) && (c == '\n')) {
-        usart_putchar('\r', stream);
-    }
+	if (fdev_get_udata(stream) && (c == '\n')) {
+		usart_putchar('\r', stream);
+	}
 
-    loop_until_bit_is_set(ODDBG_USR, ODDBG_UDRE);
-    ODDBG_UDR = c;
-    return 0;
+	loop_until_bit_is_set(ODDBG_USR, ODDBG_UDRE);
+	ODDBG_UDR = c;
+	return 0;
 }
 
 static int usart_getchar(FILE *stream)
 {
 // ATOMIC_BLOCK(ATOMIC_RESTORESTATE)
-    {
-        uint8_t buf;
+	{
+		uint8_t buf;
 
-        if (fifo_read(&rx.fifo, &buf, 1) == 1) {
-            return buf;
-        }
-    }
-    return _FDEV_ERR;
+		if (fifo_read(&rx.fifo, &buf, 1) == 1) {
+			return buf;
+		}
+	}
+	return _FDEV_ERR;
 }
 
 void USART_CLI(int argc, const char *const *argv)
 {
-    printf_P(PSTR("rx.fifo.overflow = %u\n"), rx.fifo.overflow);
-    printf_P(PSTR("rx.fifo avail_read = %u\n"), fifo_avail_read(&rx.fifo));
-    printf_P(PSTR("rx.fifo avail_write = %u\n"), fifo_avail_write(&rx.fifo));
+	printf_P(PSTR("rx.fifo.overflow = %u\n"), rx.fifo.overflow);
+	printf_P(PSTR("rx.fifo avail_read = %u\n"), fifo_avail_read(&rx.fifo));
+	printf_P(PSTR("rx.fifo avail_write = %u\n"), fifo_avail_write(&rx.fifo));
 }
 
 FILE *USART_Init(void)
 {
-    ODDBG_UCR |= _BV(ODDBG_TXEN) | _BV(ODDBG_RXEN) | _BV(ODDBG_RXCIE);
-    ODDBG_UBRR = BAUD2DIV(74880);
+	ODDBG_UCR |= _BV(ODDBG_TXEN) | _BV(ODDBG_RXEN) | _BV(ODDBG_RXCIE);
+	ODDBG_UBRR = BAUD2DIV(74880);
 
-    IO_DIR_OUT(UART_TX);
-    IO_DIR_IN(UART_RX);
+	IO_DIR_OUT(UART_TX);
+	IO_DIR_IN(UART_RX);
 
-    static FILE myfp = FDEV_SETUP_STREAM(usart_putchar, usart_getchar, _FDEV_SETUP_RW);
+	static FILE myfp = FDEV_SETUP_STREAM(usart_putchar, usart_getchar, _FDEV_SETUP_RW);
 
-    return &myfp;
+	return &myfp;
 }
 
 #if 0
 static int usart_write_sync(const void *p, uint16_t len)
 {
-    int ret = len;
-    const uint8_t *chrs = (const uint8_t *)p;
+	int ret = len;
+	const uint8_t *chrs = (const uint8_t *)p;
 
-    while (len-- > 0) {
-        while (!(ODDBG_USR & (1 << ODDBG_UDRE))) {
-            ; /* wait for data register empty */
-        }
-        ODDBG_UDR = *chrs++;
-    }
+	while (len-- > 0) {
+		while (!(ODDBG_USR & (1 << ODDBG_UDRE))) {
+			; /* wait for data register empty */
+		}
+		ODDBG_UDR = *chrs++;
+	}
 
-    return ret;
+	return ret;
 }
 #endif

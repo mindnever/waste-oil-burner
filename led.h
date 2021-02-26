@@ -2,11 +2,11 @@
 #define _WOB_LED_H_
 
 typedef enum {
-    blink_off,
-    blink_slow,
-    blink_fast,
-    blink_on,
-    blink_pulse
+	blink_off,
+	blink_slow,
+	blink_fast,
+	blink_on,
+	blink_pulse
 } blink_t;
 
 extern uint8_t led_a;

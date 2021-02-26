@@ -4,13 +4,13 @@
 #define NUM_ANALOG_SENSORS 3
 
 typedef struct {
-    float gain;
-    float offset;
-    float filter;
+	float gain;
+	float offset;
+	float filter;
 } AnalogSensorCalibration;
 
 typedef struct {
-    AnalogSensorCalibration Calibration[NUM_ANALOG_SENSORS];
+	AnalogSensorCalibration Calibration[NUM_ANALOG_SENSORS];
 } AnalogSensorConfiguration;
 
 extern AnalogSensorConfiguration ADC_Config;

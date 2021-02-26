@@ -93,14 +93,14 @@
 #define K6_INVERTED     true
 
 #define DEFAULT_RELAY_CONFIG \
-    { \
-        [RELAY_HEATER] = 1, \
-        [RELAY_FAN]    = 2, \
-        [RELAY_AIR]    = 3, \
-        [RELAY_SPARK]  = 4, \
-        [RELAY_EXT1]   = 5, \
-        [RELAY_EXT2]   = 6, \
-    }
+	{ \
+		[RELAY_HEATER] = 1, \
+		[RELAY_FAN]    = 2, \
+		[RELAY_AIR]    = 3, \
+		[RELAY_SPARK]  = 4, \
+		[RELAY_EXT1]   = 5, \
+		[RELAY_EXT2]   = 6, \
+	}
 
 #define LED_ON(n)     IO_PIN_LOW(n)
 #define LED_OFF(n)    IO_PIN_HIGH(n)

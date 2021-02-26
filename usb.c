@@ -10,12 +10,12 @@
 
 void USB_Task()
 {
-    USB_USBTask();
+	USB_USBTask();
 #ifdef USE_USB_VCP
-    VCP_Task();
+	VCP_Task();
 #endif
 #ifdef USE_USB_HID
-    HID_Task();
+	HID_Task();
 #endif
 }
 
@@ -24,15 +24,15 @@ void USB_Task()
  */
 void EVENT_USB_Device_ConfigurationChanged(void)
 {
-    bool ConfigSuccess = true;
+	bool ConfigSuccess = true;
 
 #ifdef USE_USB_VCP
-    ConfigSuccess &= VCP_EVENT_USB_Device_ConfigurationChanged();
+	ConfigSuccess &= VCP_EVENT_USB_Device_ConfigurationChanged();
 #endif
 #ifdef USE_USB_HID
-    ConfigSuccess &= HID_EVENT_USB_Device_ConfigurationChanged();
+	ConfigSuccess &= HID_EVENT_USB_Device_ConfigurationChanged();
 #endif
-    USB_Device_EnableSOFEvents();
+	USB_Device_EnableSOFEvents();
 }
 
 /** Event handler for the USB_ControlRequest event. This is used to catch and process control requests sent to
@@ -42,10 +42,10 @@ void EVENT_USB_Device_ConfigurationChanged(void)
 void EVENT_USB_Device_ControlRequest(void)
 {
 #ifdef USE_USB_VCP
-    VCP_EVENT_USB_Device_ControlRequest();
+	VCP_EVENT_USB_Device_ControlRequest();
 #endif
 #ifdef USE_USB_HID
-    HID_EVENT_USB_Device_ControlRequest();
+	HID_EVENT_USB_Device_ControlRequest();
 #endif
 }
 
@@ -53,6 +53,6 @@ void EVENT_USB_Device_ControlRequest(void)
 void EVENT_USB_Device_StartOfFrame(void)
 {
 #ifdef USE_USB_HID
-    HID_EVENT_USB_Device_StartOfFrame();
+	HID_EVENT_USB_Device_StartOfFrame();
 #endif
 }

@@ -8,24 +8,24 @@
 #define REPORT_QUEUE_SIZE 8
 
 struct ReportItem {
-    uint8_t id;
-    uint8_t size;
-    HID_Report_Storage_t data;
+	uint8_t id;
+	uint8_t size;
+	HID_Report_Storage_t data;
 };
 
 static struct ReportItem queued[REPORT_QUEUE_SIZE];
 
 bool HID_Report(uint8_t id, const void *data, uint8_t size)
 {
-    for (uint8_t i = 0; i < REPORT_QUEUE_SIZE; ++i) {
-        if (queued[i].size == 0) {
-            memcpy(&queued[i].data, data, size);
-            queued[i].id   = id;
-            queued[i].size = size;
-            return true;
-        }
-    }
-    return false;
+	for (uint8_t i = 0; i < REPORT_QUEUE_SIZE; ++i) {
+		if (queued[i].size == 0) {
+			memcpy(&queued[i].data, data, size);
+			queued[i].id   = id;
+			queued[i].size = size;
+			return true;
+		}
+	}
+	return false;
 }
 
 /** LUFA HID Class driver interface configuration and state information. This structure is
@@ -33,39 +33,39 @@ bool HID_Report(uint8_t id, const void *data, uint8_t size)
  *  within a device can be differentiated from one another.
  */
 USB_ClassInfo_HID_Device_t Sensor_HID_Interface = {
-    .Config                     = {
-        .InterfaceNumber  = INTERFACE_ID_HID_SENSOR,
-        .ReportINEndpoint = {
-            .Address = SENSOR_EPADDR,
-            .Size    = SENSOR_EPSIZE,
-            .Banks   = 1,
-        },
-        .PrevReportINBufferSize = SENSOR_EPSIZE,
-    },
+	.Config                     = {
+		.InterfaceNumber  = INTERFACE_ID_HID_SENSOR,
+		.ReportINEndpoint = {
+			.Address = SENSOR_EPADDR,
+			.Size    = SENSOR_EPSIZE,
+			.Banks   = 1,
+		},
+		.PrevReportINBufferSize = SENSOR_EPSIZE,
+	},
 };
 
 void HID_Task()
 {
-    HID_Device_USBTask(&Sensor_HID_Interface);
+	HID_Device_USBTask(&Sensor_HID_Interface);
 }
 
 bool HID_EVENT_USB_Device_ConfigurationChanged(void)
 {
-    bool ConfigSuccess = true;
+	bool ConfigSuccess = true;
 
-    ConfigSuccess &= HID_Device_ConfigureEndpoints(&Sensor_HID_Interface);
+	ConfigSuccess &= HID_Device_ConfigureEndpoints(&Sensor_HID_Interface);
 
-    return ConfigSuccess;
+	return ConfigSuccess;
 }
 
 void HID_EVENT_USB_Device_ControlRequest(void)
 {
-    HID_Device_ProcessControlRequest(&Sensor_HID_Interface);
+	HID_Device_ProcessControlRequest(&Sensor_HID_Interface);
 }
 
 void HID_EVENT_USB_Device_StartOfFrame(void)
 {
-    HID_Device_MillisecondElapsed(&Sensor_HID_Interface);
+	HID_Device_MillisecondElapsed(&Sensor_HID_Interface);
 }
 
 /** HID class driver callback function for the creation of HID reports to the host.
@@ -84,29 +84,29 @@ bool CALLBACK_HID_Device_CreateHIDReport(USB_ClassInfo_HID_Device_t *const HIDIn
                                          void *ReportData,
                                          uint16_t *const ReportSize)
 {
-    bool ret = false;
+	bool ret = false;
 
-    switch (ReportType) {
-    case HID_REPORT_ITEM_In:
-        *ReportSize = 0;
-        for (uint8_t i = 0; i < REPORT_QUEUE_SIZE; ++i) {
-            if (queued[i].size && ((*ReportID == 0) || (*ReportID == queued[i].id))) {
-                memcpy(ReportData, &queued[i].data, queued[i].size);
-                *ReportSize    = queued[i].size;
-                *ReportID      = queued[i].id;
-                queued[i].size = 0;
-                ret = true;
-                break;
-            }
-        }
+	switch (ReportType) {
+	case HID_REPORT_ITEM_In:
+		*ReportSize = 0;
+		for (uint8_t i = 0; i < REPORT_QUEUE_SIZE; ++i) {
+			if (queued[i].size && ((*ReportID == 0) || (*ReportID == queued[i].id))) {
+				memcpy(ReportData, &queued[i].data, queued[i].size);
+				*ReportSize    = queued[i].size;
+				*ReportID      = queued[i].id;
+				queued[i].size = 0;
+				ret = true;
+				break;
+			}
+		}
 
-        break;
+		break;
 
-    case HID_REPORT_ITEM_Feature: // unsupported
-        break;
-    }
+	case HID_REPORT_ITEM_Feature: // unsupported
+		break;
+	}
 
-    return ret;
+	return ret;
 }
 
 /** HID class driver callback function for the processing of HID reports from the host.
@@ -122,5 +122,6 @@ void CALLBACK_HID_Device_ProcessHIDReport(USB_ClassInfo_HID_Device_t *const HIDI
                                           const uint8_t ReportType,
                                           const void *ReportData,
                                           const uint16_t ReportSize)
-{}
+{
+}
 #endif /* USE_USB_HID */

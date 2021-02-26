@@ -95,12 +95,12 @@
 
 
 #define DEFAULT_RELAY_CONFIG \
-    { \
-        [RELAY_EXT1] = 1, \
-        [RELAY_EXT2] = 2, \
-        [RELAY_EXT3] = 3, \
-        [RELAY_EXT4] = 4, \
-    }
+	{ \
+		[RELAY_EXT1] = 1, \
+		[RELAY_EXT2] = 2, \
+		[RELAY_EXT3] = 3, \
+		[RELAY_EXT4] = 4, \
+	}
 
 #define LED_ON(n)     IO_PIN_LOW(n)
 #define LED_OFF(n)    IO_PIN_HIGH(n)

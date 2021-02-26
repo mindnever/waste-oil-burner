@@ -64,267 +64,267 @@ static uint8_t twst;
 void twi_init()
 {
 #if F_CPU < 3600000UL
-    TWBR = 10; /* smallest TWBR value, see note [5] */
+	TWBR = 10; /* smallest TWBR value, see note [5] */
 #else
-    TWBR = (F_CPU / TWI_FREQ - 16) / TWI_PRE / 2;
+	TWBR = (F_CPU / TWI_FREQ - 16) / TWI_PRE / 2;
 #endif
 
 #if TWI_PRE == 1
-    TWSR = TWI_PRE_1;
+	TWSR = TWI_PRE_1;
 #elif TWI_PRE == 4
-    TWSR = TWI_PRE_4;
+	TWSR = TWI_PRE_4;
 #elif TWI_PRE == 16
-    TWSR = TWI_PRE_16;
+	TWSR = TWI_PRE_16;
 #elif TWI_PRE == 64
-    TWSR = TWI_PRE_64;
+	TWSR = TWI_PRE_64;
 #else
 # error invalid TWI_PRE value
 #endif
 
 // enable internal pullups
-    TWI_PORT |= _BV(TWI_SCL_PIN) | _BV(TWI_SDA_PIN);
+	TWI_PORT |= _BV(TWI_SCL_PIN) | _BV(TWI_SDA_PIN);
 }
 
 #define TWI_WAIT \
-    { int timeout = 0; while (((TWCR & _BV(TWINT)) == 0) && (++timeout < TWI_TIMEOUT)) ; if (!(TWCR & _BV(TWINT))) { return -1; } \
-    }
+	{ int timeout = 0; while (((TWCR & _BV(TWINT)) == 0) && (++timeout < TWI_TIMEOUT)); if (!(TWCR & _BV(TWINT))) { return -1; } \
+	}
 
 int twi_write_bytes(uint8_t base, uint8_t addr, int len, const uint8_t *buf)
 {
-    uint8_t n = 0;
-    int rv    = 0;
+	uint8_t n = 0;
+	int rv    = 0;
 
 restart:
-    if (n++ >= MAX_ITER) {
-        return -1;
-    }
+	if (n++ >= MAX_ITER) {
+		return -1;
+	}
 begin:
 
-    /* Note [15] */
-    TWCR = _BV(TWINT) | _BV(TWSTA) | _BV(TWEN); /* send start condition */
+	/* Note [15] */
+	TWCR = _BV(TWINT) | _BV(TWSTA) | _BV(TWEN); /* send start condition */
 
-    TWI_WAIT; /* wait for transmission */
+	TWI_WAIT; /* wait for transmission */
 
-    switch ((twst = TW_STATUS)) {
-    case TW_REP_START: /* OK, but should not happen */
-    case TW_START:
-        break;
+	switch ((twst = TW_STATUS)) {
+	case TW_REP_START: /* OK, but should not happen */
+	case TW_START:
+		break;
 
-    case TW_MT_ARB_LOST:
-        goto begin;
+	case TW_MT_ARB_LOST:
+		goto begin;
 
-    default:
-        return -1; /* error: not in start condition */
-                   /* NB: do /not/ send stop condition */
-    }
+	default:
+		return -1; /* error: not in start condition */
+		           /* NB: do /not/ send stop condition */
+	}
 
-    /* send SLA+W */
-    TWDR = base | TW_WRITE;
-    TWCR = _BV(TWINT) | _BV(TWEN); /* clear interrupt to start transmission */
+	/* send SLA+W */
+	TWDR = base | TW_WRITE;
+	TWCR = _BV(TWINT) | _BV(TWEN); /* clear interrupt to start transmission */
 
-    TWI_WAIT; /* wait for transmission */
+	TWI_WAIT; /* wait for transmission */
 
-    switch ((twst = TW_STATUS)) {
-    case TW_MT_SLA_ACK:
-        break;
+	switch ((twst = TW_STATUS)) {
+	case TW_MT_SLA_ACK:
+		break;
 
-    case TW_MT_SLA_NACK: /* nack during select: device busy writing */
-        goto restart;
+	case TW_MT_SLA_NACK: /* nack during select: device busy writing */
+		goto restart;
 
-    case TW_MT_ARB_LOST: /* re-arbitrate */
-        goto begin;
+	case TW_MT_ARB_LOST: /* re-arbitrate */
+		goto begin;
 
-    default:
-        goto error; /* must send stop condition */
-    }
+	default:
+		goto error; /* must send stop condition */
+	}
 
-    TWDR = addr; /* low 8 bits of addr */
-    TWCR = _BV(TWINT) | _BV(TWEN); /* clear interrupt to start transmission */
+	TWDR = addr; /* low 8 bits of addr */
+	TWCR = _BV(TWINT) | _BV(TWEN); /* clear interrupt to start transmission */
 
-    TWI_WAIT; /* wait for transmission */
+	TWI_WAIT; /* wait for transmission */
 
-    switch ((twst = TW_STATUS)) {
-    case TW_MT_DATA_ACK:
-        break;
+	switch ((twst = TW_STATUS)) {
+	case TW_MT_DATA_ACK:
+		break;
 
-    case TW_MT_DATA_NACK:
-        goto quit;
+	case TW_MT_DATA_NACK:
+		goto quit;
 
-    case TW_MT_ARB_LOST:
-        goto begin;
+	case TW_MT_ARB_LOST:
+		goto begin;
 
-    default:
-        goto error; /* must send stop condition */
-    }
+	default:
+		goto error; /* must send stop condition */
+	}
 
-    for (; len > 0; len--) {
-        TWDR = *buf++;
-        TWCR = _BV(TWINT) | _BV(TWEN); /* start transmission */
+	for (; len > 0; len--) {
+		TWDR = *buf++;
+		TWCR = _BV(TWINT) | _BV(TWEN); /* start transmission */
 
-        TWI_WAIT; /* wait for transmission */
+		TWI_WAIT; /* wait for transmission */
 
-        switch ((twst = TW_STATUS)) {
-        case TW_MT_DATA_NACK:
-            goto error; /* device write protected -- Note [16] */
+		switch ((twst = TW_STATUS)) {
+		case TW_MT_DATA_NACK:
+			goto error; /* device write protected -- Note [16] */
 
-        case TW_MT_DATA_ACK:
-            rv++;
-            break;
+		case TW_MT_DATA_ACK:
+			rv++;
+			break;
 
-        default:
-            goto error;
-        }
-    }
+		default:
+			goto error;
+		}
+	}
 quit:
-    TWCR = _BV(TWINT) | _BV(TWSTO) | _BV(TWEN); /* send stop condition */
+	TWCR = _BV(TWINT) | _BV(TWSTO) | _BV(TWEN); /* send stop condition */
 
-    return rv;
+	return rv;
 
 error:
-    rv = -1;
-    goto quit;
+	rv = -1;
+	goto quit;
 }
 
 
 int twi_read_bytes(uint8_t base, uint8_t addr, int len, uint8_t *buf)
 {
-    uint8_t twcr, n = 0;
-    int rv = 0;
+	uint8_t twcr, n = 0;
+	int rv = 0;
 
 restart:
-    if (n++ >= MAX_ITER) {
-        return -1;
-    }
+	if (n++ >= MAX_ITER) {
+		return -1;
+	}
 begin:
 
-    TWCR = _BV(TWINT) | _BV(TWSTA) | _BV(TWEN); /* send start condition */
+	TWCR = _BV(TWINT) | _BV(TWSTA) | _BV(TWEN); /* send start condition */
 
-    TWI_WAIT;
+	TWI_WAIT;
 
-    switch ((twst = TW_STATUS)) {
-    case TW_REP_START: /* OK, but should not happen */
-    case TW_START:
-        break;
+	switch ((twst = TW_STATUS)) {
+	case TW_REP_START: /* OK, but should not happen */
+	case TW_START:
+		break;
 
-    case TW_MT_ARB_LOST: /* Note [9] */
-        goto begin;
+	case TW_MT_ARB_LOST: /* Note [9] */
+		goto begin;
 
-    default:
-        return -1; /* error: not in start condition */
-                   /* NB: do /not/ send stop condition */
-    }
+	default:
+		return -1; /* error: not in start condition */
+		           /* NB: do /not/ send stop condition */
+	}
 
-    /* Note [10] */
-    /* send SLA+W */
-    TWDR = base | TW_WRITE;
-    TWCR = _BV(TWINT) | _BV(TWEN); /* clear interrupt to start transmission */
+	/* Note [10] */
+	/* send SLA+W */
+	TWDR = base | TW_WRITE;
+	TWCR = _BV(TWINT) | _BV(TWEN); /* clear interrupt to start transmission */
 
-    TWI_WAIT;
+	TWI_WAIT;
 
-    switch ((twst = TW_STATUS)) {
-    case TW_MT_SLA_ACK:
-        break;
+	switch ((twst = TW_STATUS)) {
+	case TW_MT_SLA_ACK:
+		break;
 
-    case TW_MT_SLA_NACK: /* nack during select: device busy writing */
-                         /* Note [11] */
-        goto restart;
+	case TW_MT_SLA_NACK: /* nack during select: device busy writing */
+		             /* Note [11] */
+		goto restart;
 
-    case TW_MT_ARB_LOST: /* re-arbitrate */
-        goto begin;
+	case TW_MT_ARB_LOST: /* re-arbitrate */
+		goto begin;
 
-    default:
-        goto error; /* must send stop condition */
-    }
+	default:
+		goto error; /* must send stop condition */
+	}
 
-    TWDR = addr; /* low 8 bits of addr */
-    TWCR = _BV(TWINT) | _BV(TWEN); /* clear interrupt to start transmission */
+	TWDR = addr; /* low 8 bits of addr */
+	TWCR = _BV(TWINT) | _BV(TWEN); /* clear interrupt to start transmission */
 
-    TWI_WAIT;
+	TWI_WAIT;
 
-    switch ((twst = TW_STATUS)) {
-    case TW_MT_DATA_ACK:
-        break;
+	switch ((twst = TW_STATUS)) {
+	case TW_MT_DATA_ACK:
+		break;
 
-    case TW_MT_DATA_NACK:
-        goto quit;
+	case TW_MT_DATA_NACK:
+		goto quit;
 
-    case TW_MT_ARB_LOST:
-        goto begin;
+	case TW_MT_ARB_LOST:
+		goto begin;
 
-    default:
-        goto error; /* must send stop condition */
-    }
+	default:
+		goto error; /* must send stop condition */
+	}
 
-    /*
-     * Note [12]
-     * Next cycle(s): master receiver mode
-     */
-    TWCR = _BV(TWINT) | _BV(TWSTA) | _BV(TWEN); /* send (rep.) start condition */
+	/*
+	 * Note [12]
+	 * Next cycle(s): master receiver mode
+	 */
+	TWCR = _BV(TWINT) | _BV(TWSTA) | _BV(TWEN); /* send (rep.) start condition */
 
-    TWI_WAIT;
+	TWI_WAIT;
 
-    switch ((twst = TW_STATUS)) {
-    case TW_START: /* OK, but should not happen */
-    case TW_REP_START:
-        break;
+	switch ((twst = TW_STATUS)) {
+	case TW_START: /* OK, but should not happen */
+	case TW_REP_START:
+		break;
 
-    case TW_MT_ARB_LOST:
-        goto begin;
+	case TW_MT_ARB_LOST:
+		goto begin;
 
-    default:
-        goto error;
-    }
+	default:
+		goto error;
+	}
 
-    /* send SLA+R */
-    TWDR = base | TW_READ;
-    TWCR = _BV(TWINT) | _BV(TWEN); /* clear interrupt to start transmission */
+	/* send SLA+R */
+	TWDR = base | TW_READ;
+	TWCR = _BV(TWINT) | _BV(TWEN); /* clear interrupt to start transmission */
 
-    TWI_WAIT;
+	TWI_WAIT;
 
-    switch ((twst = TW_STATUS)) {
-    case TW_MR_SLA_ACK:
-        break;
+	switch ((twst = TW_STATUS)) {
+	case TW_MR_SLA_ACK:
+		break;
 
-    case TW_MR_SLA_NACK:
-        goto quit;
+	case TW_MR_SLA_NACK:
+		goto quit;
 
-    case TW_MR_ARB_LOST:
-        goto begin;
+	case TW_MR_ARB_LOST:
+		goto begin;
 
-    default:
-        goto error;
-    }
+	default:
+		goto error;
+	}
 
-    for (twcr = _BV(TWINT) | _BV(TWEN) | _BV(TWEA) /* Note [13] */;
-         len > 0;
-         len--) {
-        if (len == 1) {
-            twcr = _BV(TWINT) | _BV(TWEN); /* send NAK this time */
-        }
-        TWCR = twcr; /* clear int to start transmission */
+	for (twcr = _BV(TWINT) | _BV(TWEN) | _BV(TWEA) /* Note [13] */;
+	     len > 0;
+	     len--) {
+		if (len == 1) {
+			twcr = _BV(TWINT) | _BV(TWEN); /* send NAK this time */
+		}
+		TWCR = twcr; /* clear int to start transmission */
 
-        TWI_WAIT;
+		TWI_WAIT;
 
-        switch ((twst = TW_STATUS)) {
-        case TW_MR_DATA_NACK:
-            len    = 0;              /* force end of loop */
-        /* FALLTHROUGH */
-        case TW_MR_DATA_ACK:
-            *buf++ = TWDR;
-            rv++;
-            break;
+		switch ((twst = TW_STATUS)) {
+		case TW_MR_DATA_NACK:
+			len    = 0;  /* force end of loop */
+		/* FALLTHROUGH */
+		case TW_MR_DATA_ACK:
+			*buf++ = TWDR;
+			rv++;
+			break;
 
-        default:
-            goto error;
-        }
-    }
+		default:
+			goto error;
+		}
+	}
 quit:
-    /* Note [14] */
-    TWCR = _BV(TWINT) | _BV(TWSTO) | _BV(TWEN); /* send stop condition */
+	/* Note [14] */
+	TWCR = _BV(TWINT) | _BV(TWSTO) | _BV(TWEN); /* send stop condition */
 
-    return rv;
+	return rv;
 
 error:
-    rv = -1;
-    goto quit;
+	rv = -1;
+	goto quit;
 }

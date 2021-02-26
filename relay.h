@@ -5,22 +5,22 @@
 #include <stdbool.h>
 
 enum RelayID {
-    _RELAY_FIRST,
+	_RELAY_FIRST,
 
-    RELAY_HEATER = _RELAY_FIRST,
-    RELAY_FAN,
-    RELAY_AIR,
-    RELAY_SPARK,
-    RELAY_EXT1,
-    RELAY_EXT2,
-    RELAY_EXT3,
-    RELAY_EXT4,
+	RELAY_HEATER = _RELAY_FIRST,
+	RELAY_FAN,
+	RELAY_AIR,
+	RELAY_SPARK,
+	RELAY_EXT1,
+	RELAY_EXT2,
+	RELAY_EXT3,
+	RELAY_EXT4,
 
-    _NRELAYS,
+	_NRELAYS,
 };
 
 typedef struct {
-    int8_t K[_NRELAYS];
+	int8_t K[_NRELAYS];
 } RelayConfig;
 
 extern RelayConfig RelayConfiguration;

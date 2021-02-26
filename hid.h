@@ -11,10 +11,10 @@
 void HID_Task(void);
 
 typedef struct {
-    uint16_t SensorGUID;
-    int16_t  Temperature;
-    uint8_t  Humidity;
-    uint8_t  Battery;
+	uint16_t SensorGUID;
+	int16_t Temperature;
+	uint8_t Humidity;
+	uint8_t Battery;
 } __attribute__((__packed__)) HID_RfRx_Report_02_t;
 
 #define WOB_REPORT_INPUT_BUTTON_A (1 << 0)
@@ -32,12 +32,12 @@ typedef struct {
 #define WOB_REPORT_OUTPUT_EXT4    (1 << 7)
 
 typedef struct {
-    uint8_t  State;
-    uint8_t  Flame;
-    uint16_t OilTemperature;
-    uint16_t WaterTemperature;
-    uint8_t  Inputs;
-    uint8_t  Outputs;
+	uint8_t State;
+	uint8_t Flame;
+	uint16_t OilTemperature;
+	uint16_t WaterTemperature;
+	uint8_t Inputs;
+	uint8_t Outputs;
 } __attribute__((__packed__)) HID_WOB_Report_03_t;
 
 #define WOB_REPORT_FLAGS_CONTROL_ENABLED (1 << 0)
@@ -54,25 +54,25 @@ typedef struct {
 #define _WOB_REPORT_ZONE_COUNT           6
 
 typedef struct {
-    uint8_t Zone;
-    uint8_t Flags;
-    int16_t SetPoint;
-    int16_t Current;
+	uint8_t Zone;
+	uint8_t Flags;
+	int16_t SetPoint;
+	int16_t Current;
 } __attribute__((__packed__)) HID_WOB_Report_04_t;
 
 typedef struct {
-    uint8_t  Zone;
-    int16_t  SetPoint;
-    uint16_t Hysteresis;
-    uint8_t  SensorType;
-    uint16_t SensorID;
+	uint8_t Zone;
+	int16_t SetPoint;
+	uint16_t Hysteresis;
+	uint8_t SensorType;
+	uint16_t SensorID;
 } __attribute__((__packed__)) HID_WOB_Report_05_t; // Zone configuration
 
 typedef union {
-    HID_RfRx_Report_02_t r02;
-    HID_WOB_Report_03_t  r03;
-    HID_WOB_Report_04_t  r04;
-    HID_WOB_Report_05_t  r05;
+	HID_RfRx_Report_02_t r02;
+	HID_WOB_Report_03_t r03;
+	HID_WOB_Report_04_t r04;
+	HID_WOB_Report_05_t r05;
 } HID_Report_Storage_t;
 
 bool HID_Report(uint8_t reportId, const void *reportData, uint8_t reportSize);

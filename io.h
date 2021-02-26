@@ -3,8 +3,8 @@
 
 #include <avr/io.h>
 
-#define _CONCAT(a, b)     a##b
-#define _CONCAT3(a, b, c) a##b##c
+#define _CONCAT(a, b)     a ## b
+#define _CONCAT3(a, b, c) a ## b ## c
 
 #define IO_PIN(n)         _CONCAT(n, _PIN)
 #define IO_PORTNAME(n)    _CONCAT(n, _PORT)

@@ -4,11 +4,11 @@
 #include <stdint.h>
 
 typedef struct {
-    uint8_t in, out;
-    uint8_t size;
-    uint8_t used;
-    uint8_t overflow;
-    uint8_t buffer[0];
+	uint8_t in, out;
+	uint8_t size;
+	uint8_t used;
+	uint8_t overflow;
+	uint8_t buffer[0];
 } fifo_t;
 
 int fifo_write(fifo_t *fifo, const uint8_t *buf, int len);
