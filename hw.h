@@ -20,4 +20,17 @@
 
 #define TICK_MS               10
 
+extern uint16_t button_a;
+extern uint16_t button_b;
+extern uint16_t button_r;
+
+#define BUTTON_DEBOUNCE                  (30 / TICK_MS)
+#define BUTTON_LONGPRESS                 (3000 / TICK_MS)
+#define BUTTON_RESTORE                   (10000 / TICK_MS)
+#define BUTTON_MAX                       0xffff
+
+#define IS_PRESSED(b)   ((b) >= BUTTON_DEBOUNCE)
+#define IS_LONGPRESS(b) ((b) >= BUTTON_LONGPRESS)
+
+
 #endif /* _WOB_HW_H_ */

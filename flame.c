@@ -16,7 +16,8 @@
 #define TIMEOUT_AIR        (FlameConfiguration.air_time / TICK_MS)
 #define TIMEOUT_SPARK      (FlameConfiguration.spark_time / TICK_MS)
 #define TIMEOUT_FLAME      (FlameConfiguration.detect_time / TICK_MS)
-
+//#define TIMEOUT_NOOIL      (FlameConfiguration.nooil_time / TICK_MS)
+#define TIMEOUT_NOOIL ((5*60*1000L)/TICK_MS)
 #define IGNITION_RETRY     (FlameConfiguration.retry_count)
 
 #define FLAME_SENSOR_DELAY (FlameConfiguration.flame_time / TICK_MS)
@@ -45,6 +46,9 @@ static struct {
     [state_burn] =         {
         .fan = true,
         .air = true,
+    },
+    [state_nooil] = {
+        .fan = false // do not..
     }
 };
 
@@ -81,7 +85,12 @@ void Flame_Task(void)
     ThermalZone *water = Zones_GetZone(ZONE_ID_WATER);
     ThermalZone *oil   = Zones_GetZone(ZONE_ID_OIL);
 
-    if (!water->Active) {
+    if(NO_OIL()) {
+        if((FlameData.state != state_nooil) && (FlameData.state != state_fault)) {
+            timer = 0;
+            FlameData.state = state_nooil;
+        }
+    } else if (!water->Active) {
         if (FlameData.state != state_fault) {
             FlameData.state = state_idle;
         }
@@ -90,6 +99,7 @@ void Flame_Task(void)
             FlameData.state = state_preheat;
         }
     }
+
 
     // flame state machine
     switch (FlameData.state) {
@@ -180,6 +190,19 @@ void Flame_Task(void)
         if (FlameData.burning == 0) {
             FlameData.state = state_idle;
         }
+        break;
+    case state_nooil:
+        // everything is off, except AIR
+        if (FlameConfiguration.manage_oil) {
+            oil->Config.Enabled = false;
+        }
+        if (++timer > TIMEOUT_NOOIL) {
+            FlameData.state = state_fault;
+            timer = 0;
+        } else if(!NO_OIL()) {
+            FlameData.state = state_idle;
+        }
+
         break;
     }
 

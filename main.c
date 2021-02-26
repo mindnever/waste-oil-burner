@@ -49,19 +49,11 @@
 #define DEFAULT_OIL_TEMP_HYST            1
 #define DEFAULT_WATER_TEMP_HYST          15
 
-#define IS_PRESSED(b)   ((b) >= BUTTON_DEBOUNCE)
-#define IS_LONGPRESS(b) ((b) >= BUTTON_LONGPRESS)
-
 #define DELAY_STATUS                     (500 / TICK_MS)
 #define CYCLE_TEMP                       (3000 / TICK_MS)
 
 #define LCD_REINIT                       (30000 / TICK_MS)
 #define UI_IDLE_TIMEOUT                  (5000 / TICK_MS)
-
-#define BUTTON_DEBOUNCE                  (30 / TICK_MS)
-#define BUTTON_LONGPRESS                 (3000 / TICK_MS)
-#define BUTTON_RESTORE                   (10000 / TICK_MS)
-#define BUTTON_MAX                       0xffff
 
 #define HID_TIME                         (750 / TICK_MS)
 #define HID_FORCE                        (5000 / TICK_MS)
@@ -79,6 +71,7 @@ static const char spark_PSTR[] PROGMEM = "spark";
 static const char flame_PSTR[] PROGMEM = "flame?";
 static const char burn_PSTR[] PROGMEM = "burn";
 static const char fault_PSTR[] PROGMEM = "fault";
+static const char nooil_PSTR[] PROGMEM = "oil?";
 
 
 static const char *state_name[] = {
@@ -91,6 +84,7 @@ static const char *state_name[] = {
     [state_detect_flame] = flame_PSTR,
     [state_burn]    = burn_PSTR,
     [state_fault]   = fault_PSTR,
+    [state_nooil]     = nooil_PSTR,
 };
 
 typedef enum {
@@ -127,13 +121,13 @@ static int8_t encoder_event;
 #endif
 
 #ifdef BUTTON_A_PORT
-static uint16_t button_a;
+uint16_t button_a;
 #endif
 #ifdef BUTTON_B_PORT
-static uint16_t button_b;
+uint16_t button_b;
 #endif
 #ifdef BUTTON_R_PORT
-static uint16_t button_r;
+uint16_t button_r;
 #endif
 
 static void IO_Init()

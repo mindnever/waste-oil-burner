@@ -1,6 +1,8 @@
 #ifndef _WOB_FLAME_H_
 #define _WOB_FLAME_H_
 
+#include "adc.h"
+
 typedef enum {
     state_idle, // 0
     state_wait, // 1
@@ -11,9 +13,10 @@ typedef enum {
     state_detect_flame, // 6
     state_burn, // 7
     state_fault, // 8
+    state_nooil, // 9
 } state_t;
 
-#define _state_count 9
+#define _state_count 10
 
 extern struct FlameData {
     state_t    state;
@@ -36,7 +39,8 @@ extern struct FlameConfiguration {
 } FlameConfiguration;
 
 #define IS_BURNING() (FlameData.sensor < FlameConfiguration.flame_trig)
-
+//#define NO_OIL() (!valid_adc[1])
+#define NO_OIL() IS_PRESSED(button_b)
 
 void Flame_Task(void);
 void Flame_Init(void);
