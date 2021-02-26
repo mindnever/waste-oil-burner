@@ -61,7 +61,7 @@ void Sys_Idle()
     sys_busy_ticks = OCF1B - TCNT1;
     while (!(TIFR1 & _BV(OCF1B))) {
 #ifdef USE_MQTT
-        mqtt_idle();
+        mqtt_task(0);
 #endif
     }
     OCR1B += IDLE_TICKS;
